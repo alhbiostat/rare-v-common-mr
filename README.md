@@ -47,9 +47,11 @@ Variant classes (rare = MAF <0.1%):
 The absolute effect of both rare **cis** and **trans** pQTLs was significantly larger than common variants
 
 **PheWAS portal for pQTL summary statistics: https://azphewas.com/** \
-**pQTL browser: https://astrazeneca-cgr-publications.github.io/pqtl-browser**/
+**pQTL browser: https://astrazeneca-cgr-publications.github.io/pqtl-browser/**
 
 **Rare-variant trait associations: [Exome sequencing analysis of 454,787 UK Bionank participants (Backman et al.)](https://www.nature.com/articles/s41586-021-04103-z)**
+
+**Genebass: [Systematic single-variant and gene-based association testing in thousands of phenotypes in 394,841 UK Biobank exomes (Karczewski et al.)](https://app.genebass.org/)**
 
 ## Required datasets
 
