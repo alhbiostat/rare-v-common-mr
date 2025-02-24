@@ -6,7 +6,17 @@ Comparing the performance of rare and common genetic instruments in an MR framew
 
 Rare variant associations with molecular and complex traits are now testable in large-scale population cohorts of whole-exome or whole-genome sequenced individuals. These varaiants typically have differing functional properties to common variants, having been suppressed to low population frequency by negative selective pressures acting against deleterious biological effects. In the context of mendelian randomisation (MR), it may be expected that genetic variants that have larger effect sizes, and tangibly interfere with molecular pathways, have greater utility in instrumenting molecular exposures. These vartiants may, for example, provide more accurate estimates of the causal effect of extreme modulation of a molecular exposure on a outcome (as in therapeutic inhibiton of a drug target).
 
-This projects serves to investigate and compare the performance of rare genetic instruments for molecular traits with their common counterparts. Focusing initially on cis-acting protein quantitiative trait loci (pQTLs).
+This projects serves to investigate and compare the performance of rare genetic instruments for molecular traits with their common counterparts. It also explores differing methods of utilising rare genetic instruments for molecular traits, for example by generating gene-based aggregate scores across differing genomic regions (coding, regulatory, protein domain specific) or using gene imparement scores.  
+
+**Two components of the work involve:**
+1. Conduting MR of **protein level exposures --> complex traits** using:  
+   - coding cis-pQTLs and trans-pQTLs (common, rare and burden and gene impairment instruments)  
+   - proximal regulatory pQTLs (e.g promoter region; common, rare and burden and DeepRVAT gene impairment instruments)  
+   - distal regulatory pQTLs (e.g. in enhancer regions; common, rare and burden and DeepRVAT gene impairment instruments)
+2. Conducting MR of **complex trait --> complex trait**:  
+   - comparing single variant (rare and common) and gene-based (burden masks and DeepRVAT gene impairment scores) instruments
+
+DeepRVAT scores are unique in that they allow instrumentation of gene "disruptions" (inferred from sequence) in a way that does not necessitate a known statistical associations with a measured molecular trait (e.g. gene or protein expression). As many features of encoded translated/transcibed transcripts are unmeasured (e.g. protein activity, biding affinity, isoform ratio) this enables instrumentation of genes in a way that does not assume a patricular molecular mode of causality.
 
 ## Resources
 
