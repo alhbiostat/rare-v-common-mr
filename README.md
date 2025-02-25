@@ -6,15 +6,15 @@ Comparing the performance of rare and common genetic instruments in an MR framew
 
 Rare variant associations with molecular and complex traits are now testable in large-scale population cohorts of whole-exome or whole-genome sequenced individuals. These varaiants typically have differing functional properties to common variants, having been suppressed to low population frequency by negative selective pressures acting against deleterious biological effects. In the context of mendelian randomisation (MR), it may be expected that genetic variants that have larger effect sizes, and tangibly interfere with molecular pathways, have greater utility in instrumenting molecular exposures. These vartiants may, for example, provide more accurate estimates of the causal effect of extreme modulation of a molecular exposure on a outcome (as in therapeutic inhibiton of a drug target).
 
-This projects serves to investigate and compare the performance of rare genetic instruments for molecular traits with their common counterparts. It also explores differing methods of utilising rare genetic instruments for molecular traits, for example by generating gene-based aggregate scores across differing genomic regions (coding, regulatory, protein domain specific) or using gene imparement scores.  
+This projects serves to investigate and compare the performance of rare genetic instruments for molecular and complex traits with their common counterparts. It also explores differing methods of utilising rare genetic instruments for molecular traits, for example by generating gene-based aggregate scores across differing genomic regions (coding, regulatory, protein domain specific) or using gene imparement scores.  
 
 **Two components of the work involve:**
-1. Conduting MR of **protein level exposures --> complex traits** using:  
+1. Conducting MR of **complex trait --> complex trait**:  
+   - comparing single variant (rare and common) and gene-based (burden masks and DeepRVAT gene impairment scores) instruments
+2. Conduting MR of **protein level exposures --> complex traits** using:  
    - coding cis-pQTLs and trans-pQTLs (common, rare and burden and gene impairment instruments)  
    - proximal regulatory pQTLs (e.g promoter region; common, rare and burden and DeepRVAT gene impairment instruments)  
    - distal regulatory pQTLs (e.g. in enhancer regions; common, rare and burden and DeepRVAT gene impairment instruments)
-2. Conducting MR of **complex trait --> complex trait**:  
-   - comparing single variant (rare and common) and gene-based (burden masks and DeepRVAT gene impairment scores) instruments
 
 DeepRVAT scores are unique in that they allow instrumentation of gene "disruptions" (inferred from sequence) in a way that does not necessitate a known statistical associations with a measured molecular trait (e.g. gene or protein expression). As many features of encoded translated/transcibed transcripts are unmeasured (e.g. protein activity, biding affinity, isoform ratio) this enables instrumentation of genes in a way that does not assume a patricular molecular mode of causality.
 
@@ -49,9 +49,13 @@ The absolute effect of both rare **cis** and **trans** pQTLs was significantly l
 **PheWAS portal for pQTL summary statistics: https://azphewas.com/** \
 **pQTL browser: https://astrazeneca-cgr-publications.github.io/pqtl-browser/**
 
-**Rare-variant trait associations: [Exome sequencing analysis of 454,787 UK Bionank participants (Backman et al.)](https://www.nature.com/articles/s41586-021-04103-z)**
+**Rare-variant trait associations:  
+[Exome sequencing analysis of 454,787 UK Bionank participants (Backman et al.)](https://www.nature.com/articles/s41586-021-04103-z)  
+[Systematic single-variant and gene-based association testing in thousands of phenotypes in 394,841 UK Biobank exomes (Karczewski et al.)](https://app.genebass.org/)**
 
-**Genebass: [Systematic single-variant and gene-based association testing in thousands of phenotypes in 394,841 UK Biobank exomes (Karczewski et al.)](https://app.genebass.org/)**
+**DeepRVAT gene impairment scores:
+[Integration of variant annotations using deep set networks boosts rare variant association testing](https://www.nature.com/articles/s41588-024-01919-z#Sec61)**
+- Gene-trait association testing results available here: https://zenodo.org/records/12736824
 
 ## Required datasets
 
@@ -71,6 +75,51 @@ How to pick low hanging fruit for example MR?: **PROTEIN --> TRAIT**
 
 ## So, what now...
 
+### PART 1:
+We wish to compare MR causal effect estimates for complex exposure, outcome relationships using several instrumentation strategies:
+- **Common variants (single SNPs)**
+  - Taken from common variant GWAS studies and Genebass ExWAS analysis of complex traits
+- **Rare variants (Genebass ExWAS)**
+  - Single SNPs (can also be partitioned by MAF into low frequency, rare and ultra-rare)
+  - Gene-based burden masks
+  - deepRVAT gene impairment scores
+
+**Putatative exposure-outcome relationships:**  
+Available DeepRVAT gene-trait associations cover a limited trait set (34 quantitative traits and 63 binary). Using those available phenotypes, ten hypothesised exposure-outcome relationships (*aided by ChatGPT*) include:
+
+1. **LDL direct → Coronary Artery Disease (CAD)**  
+   - Elevated low-density lipoprotein (LDL) cholesterol is a well-established risk factor for CAD.
+
+2. **Body Mass Index (BMI) → Type 2 Diabetes (T2D)**  
+   - Higher BMI is strongly associated with an increased risk of developing Type 2 Diabetes.
+
+3. **Vitamin D → Multiple Sclerosis (MS)**  
+   - Lower vitamin D levels have been implicated in the pathogenesis of MS.
+
+4. **Triglycerides → Ischemic Stroke**  
+   - Elevated triglyceride levels have been associated with an increased risk of ischemic stroke.
+
+5. **Glycated Haemoglobin (HbA1c) → Atrial Fibrillation (AF)**  
+   - Poor glycemic control, reflected by higher HbA1c, has been linked to an increased risk of AF.
+
+6. **Cystatin C → Chronic Kidney Disease (CKD)**  
+   - Cystatin C is a marker of kidney function, and its elevation may contribute to CKD progression.
+
+7. **Mean Platelet Volume (MPV) → Venous Thromboembolism (VTE)**  
+   - Higher MPV has been associated with an increased risk of VTE.
+
+9. **IGF-1 → Prostate Cancer**  
+   - Insulin-like growth factor 1 (IGF-1) has been implicated in prostate cancer risk.
+
+10. **Waist-to-Hip Ratio (BMI-corrected) → Hypertension**  
+   - Central obesity (as measured by waist-to-hip ratio) is a strong predictor of hypertension.
+
+11. **Red Blood Cell (RBC) erythrocyte count → Ischemic Stroke**  
+12. **Mean Corpuscular Volume (MCV) → Ischemic Stroke** 
+13. **Mean Platelet Volume (MPV) → Ischemic Stroke**
+   - Several red blood cell and platelet parameters have been associated with risk of ischemic stroke.
+
+### PART 2:  
 We wish to compare MR causal effect estimates for molecular (protein) exposures on health traits using rare and common instruments. Ideally, this requires there to be a detectable causal effect we can compare the magnitude of across instrument sets...
 
 The low hanging fruit to start off with are those UKB olink proteins that show an association with measured traits. This has be tested using the measured protein concentrations themselves (as done for a small number of traits in Sun et al.) and using gene based tests of amalgamated PTVs in olink genes (essentially, leveraging genetically predicted protein levels). This information is available in the PheWAS portal above, so may be the best place to start...
