@@ -54,7 +54,7 @@ The absolute effect of both rare **cis** and **trans** pQTLs was significantly l
 [Systematic single-variant and gene-based association testing in thousands of phenotypes in 394,841 UK Biobank exomes (Karczewski et al.)](https://app.genebass.org/)**
 
 **DeepRVAT gene impairment scores:
-[Integration of variant annotations using deep set networks boosts rare variant association testing](https://www.nature.com/articles/s41588-024-01919-z#Sec61)**
+[Integration of variant annotations using deep set networks boosts rare variant association testing (Clarke et al.)](https://www.nature.com/articles/s41588-024-01919-z#Sec61)**
 - Gene-trait association testing results available here: https://zenodo.org/records/12736824
 
 ## Required datasets
