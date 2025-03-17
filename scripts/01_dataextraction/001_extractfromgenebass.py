@@ -69,7 +69,7 @@ target_studies = {'30780',
 mt_set = mt.filter_cols(hl.literal(target_studies).contains(mt.phenocode))
 mt_gene_set = mt_gene.filter_cols(hl.literal(target_studies).contains(mt_gene.phenocode))
 
-for key in range(1,len(target_studies)+1):
+for key in range(3,len(target_studies)+1):
 	col_key = mt_set.cols().take(key)[key-1]
 
 	mt_study = mt_set.filter_cols(
@@ -80,11 +80,17 @@ for key in range(1,len(target_studies)+1):
 		(mt_set.modifier == col_key['modifier']))
 
 	mt_study_gene = mt_gene_set.filter_cols(
-		(mt_gene_set.description == col_key['description']) &
+		(mt_gene_set.trait_type == col_key['trait_type']) &
 		(mt_gene_set.phenocode == col_key['phenocode']) &
+		(mt_gene_set.pheno_sex == col_key['pheno_sex']) &
+		(mt_gene_set.coding == col_key['coding']) &
 		(mt_gene_set.modifier == col_key['modifier']))
 
 	desc =  mt_study.cols().select('description').collect()[0].description
+	
+	if col_key['phenocode'] == 'Ischemic_stroke_custom':
+		desc = ''
+
 	print("pheno:", desc)
 
 	outname = "".join(["genebass_ukbwes_","p",col_key['phenocode'], "_", desc.replace(" ","_").replace("(", "").replace(")", ""), ".tsv"])
