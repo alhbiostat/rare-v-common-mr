@@ -87,23 +87,20 @@ Available DeepRVAT gene-trait associations cover a limited trait set (34 quantit
 5. **Glycated Haemoglobin (HbA1c) → Atrial Fibrillation (AF)**  
    - Poor glycemic control, reflected by higher HbA1c, has been linked to an increased risk of AF.
 
-6. **Cystatin C → Chronic Kidney Disease (CKD)**  
-   - Cystatin C is a marker of kidney function, and its elevation may contribute to CKD progression.
-
-7. **Mean Platelet Volume (MPV) → Venous Thromboembolism (VTE)**  
+6. **Mean Platelet Volume (MPV) → Venous Thromboembolism (VTE)**  
    - Higher MPV has been associated with an increased risk of VTE.
 
-8. **IGF-1 → Prostate Cancer**  
+7. **IGF-1 → Prostate Cancer**  
    - Insulin-like growth factor 1 (IGF-1) has been implicated in prostate cancer risk.
 
-9.  **Waist-to-Hip Ratio (BMI-corrected) → Hypertension**  
+8.  **Waist-to-Hip Ratio (BMI-corrected) → Hypertension**  
     - Central obesity (as measured by waist-to-hip ratio) is a strong predictor of hypertension.
 
-10. **Red Blood Cell (RBC) erythrocyte count → Ischemic Stroke**  
+9.  **Red Blood Cell (RBC) erythrocyte count → Ischemic Stroke**  
 
-11. **Mean Corpuscular Volume (MCV) → Ischemic Stroke** 
+10. **Mean Corpuscular Volume (MCV) → Ischemic Stroke** 
 
-12. **Mean Platelet Volume (MPV) → Ischemic Stroke**
+11. **Mean Platelet Volume (MPV) → Ischemic Stroke**
     - Several red blood cell and platelet parameters have been associated with risk of ischemic stroke.
 
 ### PART 2:  
