@@ -22,6 +22,13 @@ dotenv::load_dot_env(file = "config.env")
 data_dir <- Sys.getenv("data_dir")
 ld_dir <- Sys.getenv("ld_dir")
 
+out_dir <- file.path(data_dir,"harmonised")
+
+message("Formatting studies:")
+message("Exposure: ", exposure_name, " (", exposure_study, ")\n",
+  "Outcome: ", outcome_name, " (", outcome_study, ")\n",
+  "Source: ", source, "\nClass: ", class)
+
 main <- function(exposure_study, outcome_study, class) {
   infile <- c(
     exposure = file.path(data_dir, "sumstats", source, exposure_study),
@@ -30,7 +37,7 @@ main <- function(exposure_study, outcome_study, class) {
 
   infile_formatted <- list()
 
-  for(i in 1:length(infiles)){
+  for(i in 1:length(infile)){
     message("Formatting: ", basename(infile[i]), " class: ", class)
     infile_formatted[[i]] <- format_sumstats(path = infile[i], class = class)
   }
@@ -39,6 +46,8 @@ main <- function(exposure_study, outcome_study, class) {
   # Extract sets of exposure variants of required frequency and format data for MR
   maf_ranges <- list(c(0.05,0.95),c(0.01,0.05),c(0,0.01),c(0,0.001))
   exposure_split <- list()
+
+  ### MODIFY THIS to split by MAF for single variants and by mask for genetests
   
   message("Formatting exposure...")
   for (maf_range in 1:length(maf_ranges)) {
@@ -50,27 +59,50 @@ main <- function(exposure_study, outcome_study, class) {
   names(exposure_split) <- c("exposure_common", "exposure_lowfreq", "exposure_rare", "exposure_ultrarare")
 
   # Perform LD clumping for common and low frequency variants
-  message("LD clumping for common and low frequency variants...")
-  exposure_common <- perform_clumping(exposure_df = exposure_split$exposure_common)
-  exposure_lowfreq <- perform_clumping(exposure_df = exposure_split$exposure_lowfreq)
+  # For rare variats lacking ld infomation, keep top hit per gene
+  exposure_finalset <- list()
   
+  message("LD clumping for common and low frequency variants...")
+  exposure_finalset[[1]] <- perform_clumping(exposure_df = exposure_split$exposure_common)
+  exposure_finalset[[2]] <- perform_clumping(exposure_df = exposure_split$exposure_lowfreq)
+  
+  exposure_finalset[[3]] <- exposure_split$exposure_rare
+  exposure_finalset[[4]] <- exposure_split$exposure_ultrarare
 
+  message("Keep top variant per gene for rare and ultra-rare variants...")
+  exposure_finalset[[5]] <- keeptop_rare(exposure_df = exposure_split$exposure_rare)
+  exposure_finalset[[6]] <- keeptop_rare(exposure_df = exposure_split$exposure_ultrarare)
 
-### UP TO HERE:
-# Down filter rare variants to one per gene, but keep both sets of resutls
-# Extract instruments from outcome GWAS
-# Harmonise and save out
+  names(exposure_finalset) <- c("exposure_common", "exposure_lowfreq", "exposure_rare", "exposure_ultrarare", "exposure_rare_filt", "exposure_ultrarare_filt")
 
-# Do the same with the masks
+  # Format outcome
+  message("Formatting outcome...")
+  outcome_formatted <- TwoSampleMR::format_data(
+    infile_formatted$outcome,
+    type = "outcome",
+    phenotype_col = "description",
+    snp_col = "SNP",
+    beta_col = "BETA",
+    se_col = "SE",
+    eaf_col = "AF",
+    effect_allele_col = "effect_allele",
+    other_allele_col = "other_allele",
+    pval_col = "Pvalue")
 
-# Modify OpenGWAS common variant harmonisation to take studies listed in studypairings.csv
+  # Extract variants from outcome study and harmonise
+  dat_harmoniosed <- lapply(exposure_finalset,
+    function(x){
+      TwoSampleMR::harmonise_data(exposure_dat = x, outcome_dat = outcome_formatted)
+    })
+  names(dat_harmoniosed) <- c("common", "lowfreq", "rare", "ultrarare", "rare_filt", "ultrarare_filt")
 
-  # For rare variats not in reference panel keep top hit per gene
-  exposure_rare <- exposure_split$exposure_rare |> 
-    arrange(gene.exposure, pval.exposure) |> 
-    filter(duplicated(gene.exposure) == FALSE) |> 
-    arrange(chr.exposure, pos.exposure)
+  message("Final instrument count:")
+  unlist(lapply(dat_harmoniosed, nrow))
 
+  # Write out list of harmonised studies split by variant frequency
+  message("Saving...")
+  outname <- paste0(paste("genebassExWAS", class, exposure_name, outcome_name, sep = "_"),".rda")
+  save(dat_harmoniosed, file = file.path(out_dir,outname))
 }
 
 format_sumstats <- function(path, class) {
@@ -94,14 +126,32 @@ format_sumstats <- function(path, class) {
       return(sumstats)
   }
   
-  if(class == "mask"){}
+  if(class == "mask"){
+    sumstats <- fread(
+      path,
+      drop = c(
+        "markerIDs", "markerAFs", "Nmarker_MACCate_1", "Nmarker_MACCate_2", "Nmarker_MACCate_3",
+        "Nmarker_MACCate_4", "Nmarker_MACCate_5", "Nmarker_MACCate_6", "Nmarker_MACCate_7","Nmarker_MACCate_8",
+        "heritability", "saige_version","coding", "modifier","n_cases_defined","n_cases_both_sexes",
+        "n_cases_females","n_cases_males","coding_description","description_more", "category"),
+      data.table = F)
+  
+  sumstats <- sumstats |> mutate(
+      effect_allele = "P", # Dummy column needed for TwoSampleMR
+      other_allele = "A", # Dummy column needed for TwoSampleMR
+      chr = sub(".chr(.*):.*", "\\1", interval),
+      pos = sub(".chr.*:(.*)\\)", "\\1", interval),
+      SNP = paste(annotation, interval, sep = "_"))
+      
+      return(sumstats)
+  }
 }
 
 exp_format <- function(exposure_df, maf_range){
   
   snps_keep <- exposure_df |> 
     filter((AF > maf_range[1] & AF <= maf_range[2]) | (1-AF > maf_range[1] & 1-AF <= maf_range[2])) |>
-    filter(Pvalue < 5e-8) |> 
+    filter(Pvalue < 8e-9) |> # Theshold from Genebass paper
     pull(markerID)
   
   exposure_formatted <- TwoSampleMR::format_data(exposure_df |> filter(markerID %in% snps_keep),
@@ -161,3 +211,15 @@ perform_clumping <- function(exposure_df){
   
   return(subset(exposure_df, sub("_.*","",exposure_df$SNP) %in% positions_keep))
 }
+
+keeptop_rare <- function(exposure_df){
+  
+  exposure_filt <- exposure_df |> 
+    arrange(gene.exposure, pval.exposure) |> 
+    filter(duplicated(gene.exposure) == FALSE) |> 
+    arrange(chr.exposure, as.numeric(pos.exposure))
+  
+  return(exposure_filt)
+}
+
+main(exposure_study = exposure_study, outcome_study = outcome_study, class = class)
