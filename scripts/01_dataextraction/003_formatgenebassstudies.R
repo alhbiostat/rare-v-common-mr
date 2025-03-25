@@ -37,72 +37,124 @@ main <- function(exposure_study, outcome_study, class) {
 
   infile_formatted <- list()
 
+  # Update column names and format
   for(i in 1:length(infile)){
     message("Formatting: ", basename(infile[i]), " class: ", class)
     infile_formatted[[i]] <- format_sumstats(path = infile[i], class = class)
   }
   names(infile_formatted) <- c("exposure","outcome")
 
-  # Extract sets of exposure variants of required frequency and format data for MR
-  maf_ranges <- list(c(0.05,0.95),c(0.01,0.05),c(0,0.01),c(0,0.001))
-  exposure_split <- list()
+  # Split instruments by MAF or mask type and extract from exposure and outcome data for MR
+  if(class == "variant"){
+    maf_ranges <- list(c(0.05,0.95),c(0.01,0.05),c(0,0.01),c(0,0.001))
+    exposure_split <- list()
 
-  ### MODIFY THIS to split by MAF for single variants and by mask for genetests
+    message("Formatting exposure...")
+    for (maf_range in 1:length(maf_ranges)) {
+      message("MAF: ", maf_ranges[[maf_range]][1], "-", maf_ranges[[maf_range]][2])
+      
+      exposure_split[[maf_range]] <- exp_format(
+        exposure_df = infile_formatted$exposure, 
+        maf_range = maf_ranges[[maf_range]],
+        pval = 8e-9) # Genebass variant threshold
+      
+      message("n instruments: ", nrow(exposure_split[[maf_range]]))
+    }
   
-  message("Formatting exposure...")
-  for (maf_range in 1:length(maf_ranges)) {
-    message("MAF: ", maf_ranges[[maf_range]][1], "-", maf_ranges[[maf_range]][2])
-    exposure_split[[maf_range]] <- exp_format(exposure_df = infile_formatted$exposure,  maf_range = maf_ranges[[maf_range]])
-    message("n instruments: ", nrow(exposure_split[[maf_range]]))
+    names(exposure_split) <- c("exposure_common", "exposure_lowfreq", "exposure_rare", "exposure_ultrarare")
+
+    # Perform LD clumping for common and low frequency variants
+    # For rare variats lacking ld infomation, keep top hit per gene
+    exposure_finalset <- list()
+  
+    message("LD clumping for common and low frequency variants...")
+    exposure_finalset[[1]] <- perform_clumping(exposure_df = exposure_split$exposure_common)
+    exposure_finalset[[2]] <- perform_clumping(exposure_df = exposure_split$exposure_lowfreq)
+    
+    exposure_finalset[[3]] <- exposure_split$exposure_rare
+    exposure_finalset[[4]] <- exposure_split$exposure_ultrarare
+
+    message("Keep top variant per gene for rare and ultra-rare variants...")
+    exposure_finalset[[5]] <- keeptop_rare(exposure_df = exposure_split$exposure_rare)
+    exposure_finalset[[6]] <- keeptop_rare(exposure_df = exposure_split$exposure_ultrarare)
+
+    names(exposure_finalset) <- c("exposure_common", "exposure_lowfreq", "exposure_rare", "exposure_ultrarare", "exposure_rare_filt", "exposure_ultrarare_filt")
+
+    # Format outcome
+    message("Formatting outcome...")
+    outcome_formatted <- TwoSampleMR::format_data(
+      infile_formatted$outcome,
+      type = "outcome",
+      phenotype_col = "description",
+      snp_col = "SNP",
+      beta_col = "BETA",
+      se_col = "SE",
+      eaf_col = "AF",
+      effect_allele_col = "effect_allele",
+      other_allele_col = "other_allele",
+      pval_col = "Pvalue")
+
+    # Extract variants from outcome study and harmonise
+    dat_harmonised <- lapply(exposure_finalset,
+      function(x){
+        TwoSampleMR::harmonise_data(exposure_dat = x, outcome_dat = outcome_formatted)
+      })
+    names(dat_harmonised) <- c("common", "lowfreq", "rare", "ultrarare", "rare_filt", "ultrarare_filt")
+
+    message("Final instrument count:")
+    print(unlist(lapply(dat_harmonised, nrow)))
   }
-  
-  names(exposure_split) <- c("exposure_common", "exposure_lowfreq", "exposure_rare", "exposure_ultrarare")
 
-  # Perform LD clumping for common and low frequency variants
-  # For rare variats lacking ld infomation, keep top hit per gene
-  exposure_finalset <- list()
-  
-  message("LD clumping for common and low frequency variants...")
-  exposure_finalset[[1]] <- perform_clumping(exposure_df = exposure_split$exposure_common)
-  exposure_finalset[[2]] <- perform_clumping(exposure_df = exposure_split$exposure_lowfreq)
-  
-  exposure_finalset[[3]] <- exposure_split$exposure_rare
-  exposure_finalset[[4]] <- exposure_split$exposure_ultrarare
+  if(class == "mask"){
+    masks <- list("missense|LC","pLoF","pLoF|missense|LC","synonymous")
+    exposure_split <- list()
 
-  message("Keep top variant per gene for rare and ultra-rare variants...")
-  exposure_finalset[[5]] <- keeptop_rare(exposure_df = exposure_split$exposure_rare)
-  exposure_finalset[[6]] <- keeptop_rare(exposure_df = exposure_split$exposure_ultrarare)
+    message("Formatting exposure...")
+    for (mask in 1:length(masks)) {
+      message("Mask: ", masks[[mask]])
+      
+      exposure_split[[mask]] <- exp_format_mask(
+        exposure_df = infile_formatted$exposure, 
+        mask = masks[[mask]],
+        pval = 6.7e-7) # Genebass burden mask threshold
+      
+      message("n instruments: ", nrow(exposure_split[[mask]]))
+    }
 
-  names(exposure_finalset) <- c("exposure_common", "exposure_lowfreq", "exposure_rare", "exposure_ultrarare", "exposure_rare_filt", "exposure_ultrarare_filt")
+    names(exposure_split) <- paste("exposure", masks, sep = "_")
 
-  # Format outcome
-  message("Formatting outcome...")
-  outcome_formatted <- TwoSampleMR::format_data(
-    infile_formatted$outcome,
-    type = "outcome",
-    phenotype_col = "description",
-    snp_col = "SNP",
-    beta_col = "BETA",
-    se_col = "SE",
-    eaf_col = "AF",
-    effect_allele_col = "effect_allele",
-    other_allele_col = "other_allele",
-    pval_col = "Pvalue")
+    # No LD clumping for masks
 
-  # Extract variants from outcome study and harmonise
-  dat_harmoniosed <- lapply(exposure_finalset,
-    function(x){
-      TwoSampleMR::harmonise_data(exposure_dat = x, outcome_dat = outcome_formatted)
-    })
-  names(dat_harmoniosed) <- c("common", "lowfreq", "rare", "ultrarare", "rare_filt", "ultrarare_filt")
+    # Format outcome
+    message("Formatting outcome...")
+    outcome_formatted <- TwoSampleMR::format_data(
+      infile_formatted$outcome,
+      type = "outcome",
+      phenotype_col = "description",
+      snp_col = "SNP",
+      beta_col = "BETA_Burden",
+      se_col = "SE_Burden",
+      eaf_col = "AF",
+      effect_allele_col = "effect_allele",
+      other_allele_col = "other_allele",
+      pval_col = "Pvalue_Burden")
 
-  message("Final instrument count:")
-  unlist(lapply(dat_harmoniosed, nrow))
+    # Extract variants from outcome study and harmonise
+    dat_harmonised <- lapply(exposure_split,
+      function(x){
+        TwoSampleMR::harmonise_data(exposure_dat = x, outcome_dat = outcome_formatted)
+      })
+    names(dat_harmonised) <- unlist(masks)
+
+    message("Final instrument count:")
+    print(unlist(lapply(dat_harmonised, nrow)))
+  }
 
   # Write out list of harmonised studies split by variant frequency
   message("Saving...")
-  outname <- paste0(paste("genebassExWAS", class, exposure_name, outcome_name, sep = "_"),".rda")
-  save(dat_harmoniosed, file = file.path(out_dir,outname))
+  outname <- paste0(paste(source, class, exposure_name, outcome_name, sep = "_"),".rda")
+  save(dat_harmonised, file = file.path(out_dir, outname))
+
 }
 
 format_sumstats <- function(path, class) {
@@ -121,7 +173,8 @@ format_sumstats <- function(path, class) {
       other_allele = gsub('.*"([A-Z].*)",.*', "\\1", alleles),
       chr = sub("chr(.*):.*", "\\1", locus),
       pos = sub("chr.*:(.*)", "\\1", locus),
-      SNP = paste0(chr,":",pos,"_",other_allele,"_",effect_allele))
+      SNP = paste0(chr,":",pos,"_",other_allele,"_",effect_allele),
+      description = ifelse(is.na(description), phenocode, description))
       
       return(sumstats)
   }
@@ -137,21 +190,23 @@ format_sumstats <- function(path, class) {
       data.table = F)
   
   sumstats <- sumstats |> mutate(
-      effect_allele = "P", # Dummy column needed for TwoSampleMR
-      other_allele = "A", # Dummy column needed for TwoSampleMR
+      effect_allele = "A", # Dummy column needed for TwoSampleMR
+      other_allele = "C", # Dummy column needed for TwoSampleMR
+      AF = 0.1, # Dummy allele frequency
       chr = sub(".chr(.*):.*", "\\1", interval),
       pos = sub(".chr.*:(.*)\\)", "\\1", interval),
-      SNP = paste(annotation, interval, sep = "_"))
+      SNP = paste(gene_symbol, annotation, interval, sep = "_"),
+      description = ifelse(is.na(description), phenocode, description))
       
       return(sumstats)
   }
 }
 
-exp_format <- function(exposure_df, maf_range){
+exp_format <- function(exposure_df, maf_range, pval){
   
   snps_keep <- exposure_df |> 
     filter((AF > maf_range[1] & AF <= maf_range[2]) | (1-AF > maf_range[1] & 1-AF <= maf_range[2])) |>
-    filter(Pvalue < 8e-9) |> # Theshold from Genebass paper
+    filter(Pvalue < pval) |> # Theshold from Genebass paper
     pull(markerID)
   
   exposure_formatted <- TwoSampleMR::format_data(exposure_df |> filter(markerID %in% snps_keep),
@@ -164,6 +219,26 @@ exp_format <- function(exposure_df, maf_range){
                                    effect_allele_col = "effect_allele",
                                    other_allele_col = "other_allele",
                                    pval_col = "Pvalue")
+  return(exposure_formatted)
+}
+
+exp_format_mask <- function(exposure_df, mask, pval){
+  
+  masks_keep <- exposure_df |> 
+    filter(annotation == mask)|>
+    filter(Pvalue_Burden < pval) |> # Theshold from Genebass paper
+    pull(SNP)
+  
+  exposure_formatted <- TwoSampleMR::format_data(exposure_df |> filter(SNP %in% masks_keep),
+                                   type = "exposure",
+                                   phenotype_col = "description",
+                                   snp_col = "SNP",
+                                   beta_col = "BETA_Burden",
+                                   se_col = "SE_Burden",
+                                   eaf_col = "AF",
+                                   effect_allele_col = "effect_allele",
+                                   other_allele_col = "other_allele",
+                                   pval_col = "Pvalue_Burden")
   return(exposure_formatted)
 }
 
