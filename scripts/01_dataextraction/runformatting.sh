@@ -2,8 +2,7 @@
 
 source "../../config.env"
 
-#studies=${project_dir}/studypairings.csv
-studies=${project_dir}/test.csv
+studies=${project_dir}/studypairings.csv
 scripts_dir=${project_dir}/scripts/01_dataextraction
 out_dir=${data_dir}/harmonised
 log_dir=${out_dir}/logs

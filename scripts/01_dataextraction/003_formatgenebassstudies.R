@@ -142,7 +142,11 @@ main <- function(exposure_study, outcome_study, class) {
     # Extract variants from outcome study and harmonise
     dat_harmonised <- lapply(exposure_split,
       function(x){
-        TwoSampleMR::harmonise_data(exposure_dat = x, outcome_dat = outcome_formatted)
+        if(nrow(x)==0){
+          return(data.frame())
+        }else{
+          TwoSampleMR::harmonise_data(exposure_dat = x, outcome_dat = outcome_formatted)
+        }  
       })
     names(dat_harmonised) <- unlist(masks)
 
@@ -228,18 +232,22 @@ exp_format_mask <- function(exposure_df, mask, pval){
     filter(annotation == mask)|>
     filter(Pvalue_Burden < pval) |> # Theshold from Genebass paper
     pull(SNP)
-  
-  exposure_formatted <- TwoSampleMR::format_data(exposure_df |> filter(SNP %in% masks_keep),
-                                   type = "exposure",
-                                   phenotype_col = "description",
-                                   snp_col = "SNP",
-                                   beta_col = "BETA_Burden",
-                                   se_col = "SE_Burden",
-                                   eaf_col = "AF",
-                                   effect_allele_col = "effect_allele",
-                                   other_allele_col = "other_allele",
-                                   pval_col = "Pvalue_Burden")
-  return(exposure_formatted)
+
+  if(length(masks_keep) == 0){
+    return(data.frame())
+  }else{
+    exposure_formatted <- TwoSampleMR::format_data(exposure_df |> filter(SNP %in% masks_keep),
+                                    type = "exposure",
+                                    phenotype_col = "description",
+                                    snp_col = "SNP",
+                                    beta_col = "BETA_Burden",
+                                    se_col = "SE_Burden",
+                                    eaf_col = "AF",
+                                    effect_allele_col = "effect_allele",
+                                    other_allele_col = "other_allele",
+                                    pval_col = "Pvalue_Burden")
+    return(exposure_formatted)
+  }
 }
 
 # Fixing bugs ieugwasr::ld_clump_local()
