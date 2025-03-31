@@ -15,13 +15,15 @@ cd ${project_dir}
 
 tail -n +2 $studies | while IFS=, read -r exposure_study outcome_study exposure_name outcome_name source class
 do
-  exposure_study=$(echo $exposure_study | tr -d '"')
-  outcome_study=$(echo $outcome_study | tr -d '"')
-
   log_file="${log_dir}/${source}_${class}_${exposure_name}_${outcome_name}.log"
   out_file="${out_dir}/${source}_${class}_${exposure_name}_${outcome_name}.rda"
 
-  if [[ $source == "genebass" && ! -f $out_file ]]; then
+  if [[ -f $out_file ]]; then
+    echo "File $out_file already exists. Skipping..."
+    continue
+  fi
+  
+  if [[ $source == "genebass" ]]; then
 
     echo "Formatting studies...
     Exposure: $exposure_name ($exposure_study)
@@ -36,8 +38,34 @@ do
           continue
     fi
 
-  else
-    echo "File $out_file already exists. Skipping..."
-    continue
+  elif [[ $source == "opengwas" ]]; then
+
+    echo "Formatting studies...
+    Exposure: $exposure_name ($exposure_study)
+    Outcome: $outcome_name ($outcome_study)
+    Source: $source
+    Class: $class" | tee -a $log_file
+
+    Rscript ${scripts_dir}/002_pullopengwasstudies.R $exposure_study $outcome_study $exposure_name $outcome_name $source $class >> $log_file 2>&1 
+
+    if [ $? -ne 0 ]; then
+          echo "Error: Harmonisation failed for $exposure_name and $outcome_name. Skipping..."
+          continue
+    fi
+
+  elif [[ $source == "deeprvat" ]]; then
+
+    echo "Formatting studies...
+    Exposure: $exposure_name ($exposure_study)
+    Outcome: $outcome_name ($outcome_study)
+    Source: $source
+    Class: $class" | tee -a $log_file
+
+    Rscript ${scripts_dir}/004_formatdeeprvatstudies.R $exposure_study $outcome_study $exposure_name $outcome_name $source $class >> $log_file 2>&1 
+
+    if [ $? -ne 0 ]; then
+          echo "Error: Harmonisation failed for $exposure_name and $outcome_name. Skipping..."
+          continue
+    fi
   fi
 done

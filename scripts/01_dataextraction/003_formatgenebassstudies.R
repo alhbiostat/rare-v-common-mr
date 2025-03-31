@@ -1,7 +1,11 @@
 # Date: 18-03-2025
 # Author: A.L.Hanson
 # Purpose: Format Genebass extracted exposure and outcome data for use in MR
-# Extract instruments of varying frequencies and clump
+# 1. Format sum stat columns
+# 2. Extract instruments within frequency windows or gene-based functional burden masks
+# 3. Perform clumping (common and low frequency variants only)
+# 4. Harmonise exposure and outcome SNP/mask data
+# 5. Export as R data object
 
 args <- commandArgs(trailingOnly = TRUE)
 
