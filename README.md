@@ -70,38 +70,13 @@ We wish to compare MR causal effect estimates for complex exposure → outcome r
   - **Gene impairment scores:** From DeepRVAT
 
 **Putatative exposure-outcome relationships:**  
-Available DeepRVAT gene-trait associations cover a limited trait set (34 quantitative traits and 63 binary). Using those available phenotypes, ten hypothesised exposure-outcome relationships (*aided by ChatGPT*) include:
+Available DeepRVAT gene-trait associations cover a limited trait set (34 quantitative traits and 63 binary). From the available phenotypes, ten exposure and eight outcomes variables were selected and pairwise combinations of all exposures and outcomes were tested for causal associations using MR with the differing instrumentations strategies above:
 
-1. **LDL direct → Coronary Artery Disease (CAD)**  
-   - Elevated low-density lipoprotein (LDL) cholesterol is a well-established risk factor for CAD.
+**Exposures:**
+Low density lipoprotein levels (LDL direct), Body Mass Index (BMI), Vitamin D, Triglycerides, Glycated Haemoglobin (HbA1c), Mean Platelet Volume (MPV), IGF-1, Waist-to-Hip Ratio (BMI-corrected), Red Blood Cell (RBC) erythrocyte count and Mean Corpuscular Volume (MCV)
 
-2. **Body Mass Index (BMI) → Type 2 Diabetes (T2D)**  
-   - Higher BMI is strongly associated with an increased risk of developing Type 2 Diabetes.
-
-3. **Vitamin D → Multiple Sclerosis (MS)**  
-   - Lower vitamin D levels have been implicated in the pathogenesis of MS.
-
-4. **Triglycerides → Ischemic Stroke**  
-   - Elevated triglyceride levels have been associated with an increased risk of ischemic stroke.
-
-5. **Glycated Haemoglobin (HbA1c) → Atrial Fibrillation (AF)**  
-   - Poor glycemic control, reflected by higher HbA1c, has been linked to an increased risk of AF.
-
-6. **Mean Platelet Volume (MPV) → Venous Thromboembolism (VTE)**  
-   - Higher MPV has been associated with an increased risk of VTE.
-
-7. **IGF-1 → Prostate Cancer**  
-   - Insulin-like growth factor 1 (IGF-1) has been implicated in prostate cancer risk.
-
-8.  **Waist-to-Hip Ratio (BMI-corrected) → Hypertension**  
-    - Central obesity (as measured by waist-to-hip ratio) is a strong predictor of hypertension.
-
-9.  **Red Blood Cell (RBC) erythrocyte count → Ischemic Stroke**  
-
-10. **Mean Corpuscular Volume (MCV) → Ischemic Stroke** 
-
-11. **Mean Platelet Volume (MPV) → Ischemic Stroke**
-    - Several red blood cell and platelet parameters have been associated with risk of ischemic stroke.
+**Outcomes:**
+Coronary Artery Disease (CAD), Type 2 Diabetes (T2D), Multiple Sclerosis (MS), Ischemic Stroke, Atrial Fibrillation (AF), Venous Thromboembolism (VTE), Prostate Cancer and Hypertension. 
 
 ### PART 2:  
 We wish to compare MR causal effect estimates for molecular (protein) exposures on health traits using rare and common instruments. Ideally, this requires there to be a detectable causal effect we can compare the magnitude of across instrument sets...
