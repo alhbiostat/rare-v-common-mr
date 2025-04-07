@@ -100,9 +100,3 @@ Rare-variant and burden effect of trait: **SNP --> TRAIT**
 How to pick low hanging fruit for example MR?: **PROTEIN --> TRAIT**
 
 4. PheWAS protein associations with UKB traits (either plasma protein levels, or burdan masks generarted from variants in olink protein encoding genes)
-
-
-
-
-
-
