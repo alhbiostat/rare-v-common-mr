@@ -7,10 +7,13 @@ format:
     toc: true
     toc-depth: 4
     toc-location: left
+    page-layout: article
 ---
 
 ```{r}
 #| label: setup
+#| message: FALSE
+#| echo: FALSE
 
 library(dotenv)
 library(here)
@@ -24,11 +27,13 @@ res_dir <- Sys.getenv("results_dir")
 
 ## Introduction
 
-Classically, Mendelian Randomisation (MR) methods utilising trait-associated genetic variants from GWAS studies have employed common polymorphisms (population MAF \> 1%) targeted by genotyping chips, or reliably imputed from reference populations, to instrument modifiable exposures. Hoewever, common variants tested within GWAS typically explain a very small fraction of the variability in a measured complex trait. Though easily estimated by MR methods, the physiological/clinical relevance of subtle, genetically proxied perturbations in an exposure varaible on an outcome of interest may be unreliable to interpret in the context of the magnitude of observed trait variation in a population. The vast majority of common variant trait associations also tend to fall outside functionally annotated genomic regions, potentially tagging regulatory sites with non-specific roles in a diversity of biological processes. These pleiotropic varaint profiles can introduce heterogeneity into causal effect estimates, and violate the exclusion restriction assumption.
+Classically, Mendelian Randomisation (MR) methods utilising trait-associated genetic variants from GWAS studies have employed common polymorphisms (population MAF \> 1%) targeted by genotyping chips, or reliably imputed from reference populations, to instrument modifiable exposures. However, common variants tested in GWAS typically explain a very small fraction of the variability in a measured complex trait, potentially exhibit pleiotropic effects acted upon by balancing selection, and are rarely causal. Rare variants, which typically show large biological effects (e.g. through abolising protein expression) provide a means of more unambiguously instrumenting relevant molecular processes. Comparison of causal estimates derived using differing methods of genetically instrumenting modifiable exposures may enhance the interpretation of the biological mechanisms underlying exposure-outcome relationships. This includes using variants from across the allele frequency spectrum, but also leveraging rare variant aggregate approaches to instrument gene-level perturbations in expression and function. 
 
-Rare variants, which typically show large biological effects (e.g. through abolising protein expression) provide a means of more unambiguously instrumenting relevant molecular processes that underly variation in measured exposures. Significant rare variant association identified by GWAS are also more likely to represent causal variation, rarther than tagging haplotypes of linked genomic sites... CONTINUE
+Causal estimates for pairwise combinations of the exposure and outcome relatonships below have been derived using twelve instrumentation strategies.
 
-\[Finish this rambling\] Comparison of causal estimates derived using differing methods of genetically instrumenting modifiable exposures may enhance the interpretation of the biological mechanisms underlying exposure-outcome relationships.
+**Exposures:** Low density lipoprotein levels (LDL direct), Body Mass Index (BMI), Vitamin D, Triglycerides, Glycated Haemoglobin (HbA1c), Mean Platelet Volume (MPV), IGF-1, Waist-to-Hip Ratio (BMI-corrected), Red Blood Cell (RBC) erythrocyte count and Mean Corpuscular Volume (MCV)
+
+**Outcomes:** Coronary Artery Disease (CAD), Type 2 Diabetes (T2D), Multiple Sclerosis (MS), Ischemic Stroke, Atrial Fibrillation (AF), Venous Thromboembolism (VTE), Prostate Cancer and Hypertension.
 
 ### Instruments
 
@@ -52,89 +57,85 @@ synonymous burden mask
 **DeepRVAT (impairment scores)**\
 gene impairment score (\<0.1% MAF)
 
+Here the focus is on 10 of the tested exposure-outcome pairs where differing instrumentation strategies show heterogeneity in causal effect estimates.
+
 ## Data import
 
-Read in harmonised instrument summary statistics and filter out variants with MAF\<1x10\^-5.
+Read in MR results from `scripts/02_analysis_complextraits/001_performMR.R` and harmonised summary statistics:
 
 ```{r}
-#| label: import harmonised studies
+#| label: import mr results
 
-filelist <- list.files(path = file.path(data_dir, "harmonised"), pattern = ".rda")
+# Import MR results
+load(file = file.path(res_dir, "results_complextrait_MR.rda"))
+# Import harmonised study data
+load(file = file.path(data_dir, "harmonised", "harmonised_studies.rda"))
 
-# Exposure - outcome study pairs
-study_pairs <- sub("^.*_.*_(.*_.*).rda","\\1",filelist) |> unique()
-
-harmonised_studies <- as.list(rep(NA, length(study_pairs)))
-names(harmonised_studies) <- study_pairs
-
-for (pair in study_pairs){
-  files <- file.path(data_dir,"harmonised", 
-                  grep(pair, list.files(path = file.path(data_dir, "harmonised")), value = T))
-  file_source <- sub(paste0("_",pair,".rda"),"",basename(files))
-  names(files) <- file_source
-  
-  for (file in file_source){
-    env <- new.env()
-    
-    if(file == "deeprvat_genescore"){
-      load(files[file], envir = env)
-      obj1 <- as.list(env)
-      names(obj1) <- "deeprvat_genescore"
-    }
-    
-    else if(file == "genebass_mask"){
-      load(files[file], envir = env)
-      obj <- as.list(env)
-      obj2 <- do.call(c, obj)
-      names(obj2) <- paste0("genebass_",names(obj$dat_harmonised))
-    }
-    
-    else if(file == "genebass_variant"){
-      load(files[file], envir = env)
-      obj <- as.list(env)
-      obj3 <- do.call(c, obj)
-      names(obj3) <- paste0("genebass_",names(obj$dat_harmonised))
-    }
-    
-    else if(file == "opengwas_variant"){
-      load(files[file], envir = env)
-      obj4 <- as.list(env)
-      names(obj4) <- paste0("opengwas_common")
-    }
+# Retain exposure-outcome pairs with significant IVW estimate for at least one instrumentations strategy
+res_MR <- lapply(results_MR, function(x){
+  sig_ivw <- x |> filter(method == "Inverse variance weighted" & pval < 0.05)
+  if(nrow(sig_ivw) == 0){
+    return(NULL)
+  } else {
+    return(x)
   }
-  
-  out_studies <- c(obj1,obj2,obj3,obj4)
-  
-  # Add column names to empty dataframes
-  col_names <- lapply(out_studies, colnames) |> unlist() |> unique()
-  
-  if(any(lapply(out_studies,nrow) == 0)){
-    empty_df <- which(lapply(out_studies,nrow) == 0)
-    for(df in empty_df){
-      out_studies[[df]] <- data.frame(matrix(data = NA, nrow = 1, ncol = length(col_names), dimnames = list(NULL,col_names)))}
-  }
-  
-  # Remove instruments with MAF<1x10^-5 (some present in genebass studies)
-  out_studies <- lapply(out_studies, function(x){
-    if(!is.na(x$eaf.exposure[1])){
-      x |> dplyr::filter(eaf.exposure > 1*10^-5 & 1-eaf.exposure > 1*10^-5)
-    }else{
-      x
-    }
-  })
-  
-  harmonised_studies[[pair]] <- out_studies 
-}
+}) 
+
+keep_pairs <- names(unlist(lapply(res_MR, nrow)))
+# Remove BMI exposure pairs (low instrument numbers)
+keep_pairs <- keep_pairs[!(grepl("^BMI",keep_pairs))] # 44 exposure-outcome pairs
+
+# Top interesting
+keep_top <- c(
+  "HbA1c_CHD", "HbA1c_T2D", "LDL_CHD", "LDL_MS", "LDL_T2D", "Trig_CHD", 
+  "Trig_T2D", "WHRadjBMI_CHD", "WHRadjBMI_Hypertension", "WHRadjBMI_T2D")
+
+res_MR <- res_MR[keep_top]
 
 # Annotations for study sets
 instrument_type <- c("genescore",rep("mask",4), rep("variant",7))
 names(instrument_type) <- names(harmonised_studies[[1]])
 
-instrument_class <- c("genescore","missense|LC","pLOF","pLOF|missense|LC","synonymous","exome:common","exome:lowfreq",
-                      "exome:rare","exome:ultrarare","exome:rare","exome:ultrarare","genome:common")
+instrument_class <- c("genescore",
+                      "mask:missense|LC","mask:pLOF","mask:pLOF|missense|LC","mask:synonymous",
+                      "exome:common","exome:lowfreq","exome:rare","exome:ultrarare",
+                      "exome:rare (top)","exome:ultrarare (top)","genome:common")
+
 names(instrument_class) <- names(harmonised_studies[[1]])
 
-rm(obj,obj1,obj2,obj3,obj4,out_studies)
+```
+
+
+```{r}
+#| label: missign mafs
+
+# Populate missing MAFs from other paired studies if possible
+
+all_mafs <- list()
+
+for(i in 1:length(harmonised_studies)){
+  snp_mafs <- do.call("rbind",lapply(harmonised_studies[[i]][names(instrument_type[instrument_type=="variant"])], function(x){
+    x[,c("SNP","effect_allele.exposure","eaf.exposure")]
+  })) |> unique()
+  all_mafs[[i]] <- snp_mafs
+}
+
+all_mafs <- do.call("rbind",all_mafs) |> arrange(SNP) |> filter(!is.na(eaf.exposure), duplicated(SNP) == FALSE)
+
+for(i in 1:length(harmonised_studies)){
+  for(j in 1:length(harmonised_studies[[i]])){
+    
+    snp_id <- harmonised_studies[[i]][[j]]$SNP
+    if (all(is.na(harmonised_studies[[i]][[j]]$eaf.exposure))){
+      harmonised_studies[[i]][[j]]$eaf.exposure <- all_mafs[match(snp_id, all_mafs$SNP),"eaf.exposure"]
+    }
+    if (all(is.na(harmonised_studies[[i]][[j]]$eaf.outcome))){
+      harmonised_studies[[i]][[j]]$eaf.outcome <- all_mafs[match(snp_id, all_mafs$SNP),"eaf.exposure"]
+    }
+  }
+}
+
+harmonised_studies <- harmonised_studies[keep_top]
 
 ```
 
@@ -145,8 +146,8 @@ Single variant instruments only:
 ```{r}
 #| label: check instruments
 #| message: FALSE
-#| fig-width: 10
-#| fig-height: 12
+#| fig-width: 8
+#| fig-height: 6
 
 # Check number of instruments, minor allele frequency and average beta values across instrument sets
 instrument_MAFs <- list()
@@ -158,7 +159,7 @@ for(i in 1:length(harmonised_studies)){
       group_by(exposure,outcome) |>
       dplyr::summarise(
         n_instruments = n(),
-        mean_maf = mean(maf),
+        mean_maf = mean(na.exclude(maf)),
         mean_beta = mean(abs(beta.exposure)))
   }))
   MAFs$pairs <- names(harmonised_studies)[i]
@@ -170,126 +171,146 @@ for(i in 1:length(harmonised_studies)){
 }
 
 instrument_MAFs <- do.call("rbind", instrument_MAFs) |>
-  mutate(study = factor(study, levels = c("opengwas_common","genebass_common",
-                                         "genebass_lowfreq",
-                                         "genebass_rare","genebass_rare_filt",
-                                         "genebass_ultrarare","genebass_ultrarare_filt",
-                                         "genebass_synonymous","genebass_missense|LC","genebass_pLoF|missense|LC","genebass_pLoF",
-                                         "deeprvat_genescore")))
+  mutate(instrument_class = factor(instrument_class, levels = c(
+    "genome:common",
+    "exome:common","exome:lowfreq",
+    "exome:rare","exome:rare (top)",
+    "exome:ultrarare","exome:ultrarare (top)",
+    "mask:synonymous","mask:missense|LC",
+    "mask:pLOF|missense|LC","mask:pLOF",
+    "genescore")))
 
 ## Plot average instrument MAF
 
 p_MAF <- ggplot(instrument_MAFs |> filter(instrument_type == "variant"),
-       aes(x = study, y = mean_maf, size = n_instruments)) +
+       aes(x = instrument_class, y = mean_maf, size = n_instruments)) +
   geom_point() + 
   facet_wrap(.~pairs, nrow = 2) +
   geom_hline(yintercept = 0.01, lty = 2) +
   geom_hline(yintercept = 0.05, lty = 2) +
   geom_hline(yintercept = 0.001, lty = 2) +
-  scale_y_log10() +
+  scale_y_log10(labels = scales::comma, limits = c(0.0001,1)) +
   theme_bw() +
   theme(legend.position = "bottom",
-        axis.text.x = element_text(angle = 90, hjust = 1)) +
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        strip.text = element_text(size = 6.5)) +
   labs(y = "Mean instrument MAF", x = "Source study", 
        size = "n (instruments)")
+
+p_MAF
 
 ## Plot average instrument beta
 
 p_beta <- ggplot(instrument_MAFs |> filter(instrument_type == "variant"),
-       aes(x = study, y = mean_beta, size = n_instruments)) +
+       aes(x = instrument_class, y = mean_beta, size = n_instruments)) +
   geom_point() + 
   facet_wrap(.~pairs, nrow = 2) +
   theme_bw() +
   theme(legend.position = "bottom",
-        axis.text.x = element_text(angle = 90, hjust = 1)) +
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        strip.text = element_text(size = 6.5)) +
   labs(y = "Mean instrument |exposure beta|", x = "Source study", 
        size = "n (instruments)")
 
-gridExtra::grid.arrange(grobs = list(p_MAF, p_beta), nrow = 2)
-```
+p_beta
 
+```
 ## Mendelian randomisation
 
-```{r}
-#| label: MR
-#| eval: FALSE
-
-# Perform MR on each exposure-outcome pair, across each of 12 instrument sets
-results_MR <- list()
-
-for(i in 1:length(harmonised_studies)){
-  
-  res_list <- list()
-  
-  for(j in 1:length(harmonised_studies[[i]])){
-    dat <- harmonised_studies[[i]][j]
-    
-    if(!is.na(dat[[1]]$SNP[1])){
-      res <- TwoSampleMR::mr(dat[[1]])
-      res$pair <- names(harmonised_studies)[i]
-      res$study <- names(harmonised_studies[[i]])[j]
-    } else {
-      res <- data.frame(
-        id.exposure = NA,
-        id.outcome = NA,
-        outcome = NA,
-        exposure = NA,
-        method = NA,
-        nsnp = NA,
-        b = NA,
-        se = NA,
-        pval = NA,
-        pair = NA,
-        study = NA
-      )
-    }
-    
-    res_list <- c(res_list, list(res))
-  }
-  res_join <- do.call("rbind", res_list)
-  results_MR <- c(results_MR, list(res_join))
-}
-
-names(results_MR) <- names(harmonised_studies)
-
-save(results_MR, file = file.path(res_dir, "results_complextrait_MR.rda"))
-```
-
-Plot of IVW estimates for each exposure-outcome pair across instrument sets
+### IVW estimates across instrument sets
 
 ```{r}
-#| fig-width: 9
-#| fig-height: 12
+#| label: forest plots
+#| fig-width: 12
+#| fig-height: 6
 
-load(file.path(res_dir, "results_complextrait_MR.rda"))
+res_IVW <- do.call("rbind", res_MR) |> filter(method == "Inverse variance weighted") |>
+  mutate(instrument_type = instrument_type[study],
+         instrument_class = factor(instrument_class[study], 
+                                   levels = c(
+                                     "genome:common",
+                                     "exome:common","exome:lowfreq",
+                                     "exome:rare","exome:rare (top)",
+                                     "exome:ultrarare","exome:ultrarare (top)",
+                                     "mask:synonymous","mask:missense|LC",
+                                     "mask:pLOF|missense|LC","mask:pLOF",
+                                     "genescore")))
 
-results_IVW <- do.call("rbind", results_MR) |> filter(method == "Inverse variance weighted") |>
-  mutate(study = factor(study, levels = c("opengwas_common","genebass_common",
-                                         "genebass_lowfreq",
-                                         "genebass_rare","genebass_rare_filt",
-                                         "genebass_ultrarare","genebass_ultrarare_filt",
-                                         "genebass_synonymous","genebass_missense|LC","genebass_pLoF|missense|LC","genebass_pLoF",
-                                         "deeprvat_genescore")))
-
-results_IVW$instrument_type = instrument_type[as.character(results_IVW$study)]
-results_IVW$instrument_class = instrument_class[as.character(results_IVW$study)]
-
-ggplot(results_IVW, aes(x = b, y = study, colour = instrument_type)) +
-  facet_wrap(.~pair, nrow = 4, scale = "free_x") +
+ggplot(res_IVW, aes(x = b, y = instrument_class, colour = instrument_type)) +
+  facet_wrap(.~pair, nrow = 2, scale = "free_x") +
   geom_vline(xintercept = 0, colour = "grey20", lty = 2) +
   geom_point(aes(pch = pval<0.05, size = nsnp)) +
   geom_errorbar(aes(xmin = b-1.96*se, xmax = b+1.96*se), width = 0.1) +
   scale_colour_manual(values = c("tomato","orange","darkblue")) +
   scale_shape_manual(values = c(1,19)) +
   theme_bw() +
-  labs(size = "n (instruments)", colour = "Type", x = "IVW")
+  labs(size = "n (instruments)", colour = "Type", x = "IVW", y = "")
 
 ```
 
-```{r}
+### Heterogeneity analysis
 
-TwoSampleMR::mr_scatter_plot(results_MR$LDL_CHD |> filter(study == "genebass_ultrarare"),
-                             dat = harmonised_studies$LDL_CHD$genebass_ultrarare)
+
+### MR Egger intercept (horizonal pleiotropy)
+
+```{r}
+#| label: pleiotropy test
+#| fig-width: 10
+#| fig-height: 6
+
+# Perform MR on each exposure-outcome pair, across each of 12 instrument sets
+res_egger <- list()
+
+for(i in 1:length(harmonised_studies)){
+  res_list <- list()
+  
+  for(j in 1:length(harmonised_studies[[i]])){
+    dat <- harmonised_studies[[i]][j]
+    
+    if(nrow(dat[[1]]) == 1){
+      res <- data.frame(
+        id.exposure = NA,
+        id.outcome = NA,
+        outcome = NA,
+        exposure = NA,
+        egger_intercept = NA,
+        se = NA,
+        pval = NA
+      )
+    } else {
+      res <- TwoSampleMR::mr_pleiotropy_test(dat[[1]])
+    }
+    
+    res$pair <- names(harmonised_studies)[i]
+    res$study <- names(harmonised_studies[[i]])[j]
+    
+    res_list <- c(res_list, list(res))
+  }
+  res_join <- do.call("rbind", res_list)
+  res_egger <- c(res_egger, list(res_join))
+}
+
+res_egger <- do.call("rbind", res_egger) |>
+  mutate(instrument_type = instrument_type[study],
+         instrument_class = factor(instrument_class[study], 
+                                   levels = c(
+                                     "genome:common",
+                                     "exome:common","exome:lowfreq",
+                                     "exome:rare","exome:rare (top)",
+                                     "exome:ultrarare","exome:ultrarare (top)",
+                                     "mask:synonymous","mask:missense|LC",
+                                     "mask:pLOF|missense|LC","mask:pLOF",
+                                     "genescore")))
+
+ggplot(res_egger, aes(x = egger_intercept, y = instrument_class, colour = instrument_type)) +
+  facet_wrap(.~pair, nrow = 2, scale = "free_x") +
+  geom_vline(xintercept = 0, colour = "grey20", lty = 2) +
+  geom_point(aes(pch = pval<0.05), size = 3) +
+  geom_errorbar(aes(xmin = egger_intercept-1.96*se, xmax = egger_intercept+1.96*se), width = 0.1) +
+  scale_colour_manual(values = c("tomato","orange","darkblue")) +
+  scale_shape_manual(values = c(1,19)) +
+  theme_bw() +
+  labs(x = "Egger intercept", colour = "Type", x = "IVW", y = "")
 
 
 ```
