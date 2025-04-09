@@ -3101,7 +3101,7 @@ vertical-align: -.125em;
   <ul>
   <li><a href="#ivw-estimates-across-instrument-sets" id="toc-ivw-estimates-across-instrument-sets" class="nav-link" data-scroll-target="#ivw-estimates-across-instrument-sets">IVW estimates across instrument sets</a></li>
   <li><a href="#heterogeneity-analysis" id="toc-heterogeneity-analysis" class="nav-link" data-scroll-target="#heterogeneity-analysis">Heterogeneity analysis</a></li>
-  <li><a href="#mr-egger-intercept-horizonal-pleiotropy" id="toc-mr-egger-intercept-horizonal-pleiotropy" class="nav-link" data-scroll-target="#mr-egger-intercept-horizonal-pleiotropy">MR Egger intercept (horizonal pleiotropy)</a></li>
+  <li><a href="#mr-egger-intercept-horizontal-pleiotropy" id="toc-mr-egger-intercept-horizontal-pleiotropy" class="nav-link" data-scroll-target="#mr-egger-intercept-horizontal-pleiotropy">MR Egger intercept (horizontal pleiotropy)</a></li>
   </ul></li>
   </ul>
 </nav>
@@ -3143,8 +3143,8 @@ vertical-align: -.125em;
 
 <section id="introduction" class="level2">
 <h2 class="anchored" data-anchor-id="introduction">Introduction</h2>
-<p>Classically, Mendelian Randomisation (MR) methods utilising trait-associated genetic variants from GWAS studies have employed common polymorphisms (population MAF &gt; 1%) targeted by genotyping chips, or reliably imputed from reference populations, to instrument modifiable exposures. However, common variants tested in GWAS typically explain a very small fraction of the variability in a measured complex trait, potentially exhibit pleiotropic effects acted upon by balancing selection, and are rarely causal. Rare variants, which typically show large biological effects (e.g. through abolising protein expression) provide a means of more unambiguously instrumenting relevant molecular processes. Comparison of causal estimates derived using differing methods of genetically instrumenting modifiable exposures may enhance the interpretation of the biological mechanisms underlying exposure-outcome relationships. This includes using variants from across the allele frequency spectrum, but also leveraging rare variant aggregate approaches to instrument gene-level perturbations in expression and function.</p>
-<p>Causal estimates for pairwise combinations of the exposure and outcome relatonships below have been derived using twelve instrumentation strategies.</p>
+<p>Classically, Mendelian Randomisation (MR) methods utilising trait-associated genetic variants from GWAS studies have employed common polymorphisms (population MAF &gt; 1%) targeted by genotyping chips, or reliably imputed from reference populations, to instrument modifiable exposures. However, common variants tested in GWAS typically explain a very small fraction of the variability in a measured complex trait, potentially exhibit pleiotropic effects acted upon by balancing selection, and are rarely causal. Rare variants, which typically show large biological effects (e.g. through abolishing protein expression) provide a means of more unambiguously instrumenting relevant molecular processes. Comparison of causal estimates derived using differing methods of genetically instrumenting modifiable exposures may enhance the interpretation of the biological mechanisms underlying exposure-outcome relationships. This includes using variants from across the allele frequency spectrum, but also leveraging rare variant aggregate approaches to instrument gene-level perturbations in expression and function.</p>
+<p>Causal estimates for pairwise combinations of the exposure and outcome relationships below have been derived using twelve instrumentation strategies.</p>
 <p><strong>Exposures:</strong> Low density lipoprotein levels (LDL direct), Body Mass Index (BMI), Vitamin D, Triglycerides, Glycated Haemoglobin (HbA1c), Mean Platelet Volume (MPV), IGF-1, Waist-to-Hip Ratio (BMI-corrected), Red Blood Cell (RBC) erythrocyte count and Mean Corpuscular Volume (MCV)</p>
 <p><strong>Outcomes:</strong> Coronary Artery Disease (CAD), Type 2 Diabetes (T2D), Multiple Sclerosis (MS), Ischemic Stroke, Atrial Fibrillation (AF), Venous Thromboembolism (VTE), Prostate Cancer and Hypertension.</p>
 <section id="instruments" class="level3">
@@ -3169,14 +3169,14 @@ gene impairment score (&lt;0.1% MAF)</p>
 </section>
 <section id="data-import" class="level2">
 <h2 class="anchored" data-anchor-id="data-import">Data import</h2>
-<p>Read in MR results from <code>scripts/02_analysis_complextraits/001_performMR.R</code> and harmonised summary statisitcs:</p>
+<p>Read in MR results from <code>scripts/02_analysis_complextraits/001_performMR.R</code> and harmonised summary statistics:</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Import MR results</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">load</span>(<span class="at">file =</span> <span class="fu">file.path</span>(res_dir, <span class="st">&quot;results_complextrait_MR.rda&quot;</span>))</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Import harmonised study data</span></span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">load</span>(<span class="at">file =</span> <span class="fu">file.path</span>(data_dir, <span class="st">&quot;harmonised&quot;</span>, <span class="st">&quot;harmonised_studies.rda&quot;</span>))</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Retain exposure-outcome pairs with significant IVW estimate for at least one instrumentations strategy</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Retain exposure-outcome pairs with significant IVW estimate for at least one instrumentation strategy</span></span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>res_MR <span class="ot">&lt;-</span> <span class="fu">lapply</span>(results_MR, <span class="cf">function</span>(x){</span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  sig_ivw <span class="ot">&lt;-</span> x <span class="sc">|&gt;</span> <span class="fu">filter</span>(method <span class="sc">==</span> <span class="st">&quot;Inverse variance weighted&quot;</span> <span class="sc">&amp;</span> pval <span class="sc">&lt;</span> <span class="fl">0.05</span>)</span>
 <span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span>(<span class="fu">nrow</span>(sig_ivw) <span class="sc">==</span> <span class="dv">0</span>){</span>
@@ -3359,8 +3359,8 @@ gene impairment score (&lt;0.1% MAF)</p>
 <section id="heterogeneity-analysis" class="level3">
 <h3 class="anchored" data-anchor-id="heterogeneity-analysis">Heterogeneity analysis</h3>
 </section>
-<section id="mr-egger-intercept-horizonal-pleiotropy" class="level3">
-<h3 class="anchored" data-anchor-id="mr-egger-intercept-horizonal-pleiotropy">MR Egger intercept (horizonal pleiotropy)</h3>
+<section id="mr-egger-intercept-horizontal-pleiotropy" class="level3">
+<h3 class="anchored" data-anchor-id="mr-egger-intercept-horizontal-pleiotropy">MR Egger intercept (horizontal pleiotropy)</h3>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Perform MR on each exposure-outcome pair, across each of 12 instrument sets</span></span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>res_egger <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>

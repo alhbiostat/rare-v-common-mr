@@ -27,9 +27,9 @@ res_dir <- Sys.getenv("results_dir")
 
 ## Introduction
 
-Classically, Mendelian Randomisation (MR) methods utilising trait-associated genetic variants from GWAS studies have employed common polymorphisms (population MAF \> 1%) targeted by genotyping chips, or reliably imputed from reference populations, to instrument modifiable exposures. However, common variants tested in GWAS typically explain a very small fraction of the variability in a measured complex trait, potentially exhibit pleiotropic effects acted upon by balancing selection, and are rarely causal. Rare variants, which typically show large biological effects (e.g. through abolising protein expression) provide a means of more unambiguously instrumenting relevant molecular processes. Comparison of causal estimates derived using differing methods of genetically instrumenting modifiable exposures may enhance the interpretation of the biological mechanisms underlying exposure-outcome relationships. This includes using variants from across the allele frequency spectrum, but also leveraging rare variant aggregate approaches to instrument gene-level perturbations in expression and function. 
+Classically, Mendelian Randomisation (MR) methods utilising trait-associated genetic variants from GWAS studies have employed common polymorphisms (population MAF \> 1%) targeted by genotyping chips, or reliably imputed from reference populations, to instrument modifiable exposures. However, common variants tested in GWAS typically explain a very small fraction of the variability in a measured complex trait, potentially exhibit pleiotropic effects acted upon by balancing selection, and are rarely causal. Rare variants, which typically show large biological effects (e.g. through abolishing protein expression) provide a means of more unambiguously instrumenting relevant molecular processes. Comparison of causal estimates derived using differing methods of genetically instrumenting modifiable exposures may enhance the interpretation of the biological mechanisms underlying exposure-outcome relationships. This includes using variants from across the allele frequency spectrum, but also leveraging rare variant aggregate approaches to instrument gene-level perturbations in expression and function. 
 
-Causal estimates for pairwise combinations of the exposure and outcome relatonships below have been derived using twelve instrumentation strategies.
+Causal estimates for pairwise combinations of the exposure and outcome relationships below have been derived using twelve instrumentation strategies.
 
 **Exposures:** Low density lipoprotein levels (LDL direct), Body Mass Index (BMI), Vitamin D, Triglycerides, Glycated Haemoglobin (HbA1c), Mean Platelet Volume (MPV), IGF-1, Waist-to-Hip Ratio (BMI-corrected), Red Blood Cell (RBC) erythrocyte count and Mean Corpuscular Volume (MCV)
 
@@ -71,7 +71,7 @@ load(file = file.path(res_dir, "results_complextrait_MR.rda"))
 # Import harmonised study data
 load(file = file.path(data_dir, "harmonised", "harmonised_studies.rda"))
 
-# Retain exposure-outcome pairs with significant IVW estimate for at least one instrumentations strategy
+# Retain exposure-outcome pairs with significant IVW estimate for at least one instrumentation strategy
 res_MR <- lapply(results_MR, function(x){
   sig_ivw <- x |> filter(method == "Inverse variance weighted" & pval < 0.05)
   if(nrow(sig_ivw) == 0){
@@ -107,7 +107,7 @@ names(instrument_class) <- names(harmonised_studies[[1]])
 
 
 ```{r}
-#| label: missign mafs
+#| label: missing mafs
 
 # Populate missing MAFs from other paired studies if possible
 
@@ -251,7 +251,7 @@ ggplot(res_IVW, aes(x = b, y = instrument_class, colour = instrument_type)) +
 ### Heterogeneity analysis
 
 
-### MR Egger intercept (horizonal pleiotropy)
+### MR Egger intercept (horizontal pleiotropy)
 
 ```{r}
 #| label: pleiotropy test
