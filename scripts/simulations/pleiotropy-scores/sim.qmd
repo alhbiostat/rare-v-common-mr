@@ -1,0 +1,166 @@
+---
+title: Simulations to develop pleiotropy scores that are comparable across allele frequency ranges and with correlated traits
+---
+
+## Background
+
+- Simulate a set of $L$ latent traits, that each have a set of $C_l$ correlated traits
+- One trait is the exposure $X$
+- $G$ variants associate with some number of $L$ latent traits, i.e. their true pleiotropy scores are equal, but their allele frequencies differ making 
+
+
+## How to simulate pleiotropic effects
+
+The simplest approach is that the distribution of betas of a variant across traits follows the same distribution regardless of frequency. However the only reason that a rare variant instrument is discovered is because it has a large effect on the exposure. So simulating the same distribution of betas for rare and common variants is unrealistic.
+
+Alternatively we could simulate betas according to the BayesS model
+
+$$
+\beta \sim N(0, 2pq^S)
+$$
+
+where S is the selection coefficient. This is a trait specific model would need to be extended to the multivariate normal case, and it's not clear what the covariance structure should be.
+
+Under the pleiotropy term $\alpha_j$ associates as:
+
+$$
+\beta_{gy, j} = \alpha_j + \beta_{gx, j}
+$$
+
+In order for it to meaningfully impact bias in MR, does $\alpha_j$ need to increase as $\beta_{gx, j}$ increases?
+
+### Relationship between $\beta_{gx, j}$, $\alpha_j$ and $Q_j$
+
+Simulate summary statistics for bgx and bgy. How does alpha increase as bgx increases to keep constant Qj?
+
+How does MR bias change?
+
+
+
+$$
+\sigma^2_j = \frac{1}{2 p_j(1-p_j) N}
+$$
+
+$$
+w_j = \beta_{gx,j}^2/\sigma^2_j = \beta_{gx,j}^2 / 2 p_j(1-p_j) N
+$$
+
+$$
+Q_j = w_j (\beta - \hat{\beta}_j)^2 = \frac{\beta_{gx,j}^2} {2 p_j(1-p_j) N} (\frac{\alpha_j}{\beta_{gx,j}})^2
+$$
+
+
+$$
+z_j = \beta_{gx,j} / \sigma_j = \beta_{gx,j} * 2 p_j(1-p_j) N
+$$
+
+$$
+\beta_j = \beta_{gy,j} / \beta_{gx,j} = \frac{\beta  \beta_{gx,j} + \alpha_j} {\beta_{gx,j}}
+$$
+
+How does $\alpha_j$ change as $p_j$ changes?
+
+$$
+\alpha_j = \sqrt{\frac{Q_j}{2 p_j(1-p_j) N}}
+$$
+
+Choose $z_j = \sqrt{30}$ to represent a GWAS significant threshold of $p = 5e^{-8}$, and choose $Q_j = 6.63$ to represent detection of heterogeneity at $p = 0.01$, sample size = 500000.
+
+```{r}
+p_j <- runif(100, 0.001, 0.1)
+Q_j <- qchisq(0.01, 1, low=F)
+N <- 500000
+alpha_j <- sqrt(Q_j / (2 * p_j * (1-p_j) * N))
+
+plot(alpha_j ~ p_j)
+plot(alpha_j ~ log(p_j))
+```
+
+How does $\beta_{gx,j}$ change as $p_j$ changes?
+
+$$
+\beta_{gx,j} = \frac{z_j} {2N p_j(1-p_j)}
+$$
+
+Check
+
+
+```{r}
+n <- 500000
+bgx <- 0.2
+bxy <- 0.6
+alpha <- 0.2
+p <- 0.05
+g <- rbinom(n, 2, p)
+prs <- g * bgx
+e <- rnorm(n, 0, sqrt(1-var(prs)))
+x <- prs + e
+yg <- x * bxy + g * alpha
+ye <- rnorm(n, 0, sqrt(1-var(yg)))
+y <- yg + ye
+var(y)
+var(x)
+```
+
+SE
+
+```{r}
+summary(lm(x ~ g))$coef[2,2]
+summary(lm(y ~ g))$coef[2,2]
+1 / sqrt(n * 2 * p * (1-p))
+```
+
+w
+
+```{r}
+w <- lm(x ~ g)$coef[2]^2 / summary(lm(y ~ g))$coef[2,2]^2
+we <- bgx ^2 / (1 / (n * 2 * p * (1-p)))
+w
+we
+```
+
+bxy
+
+```{r}
+bxyhat <- lm(y ~ g)$coef[2] / lm(x ~ g)$coef[2]
+bxye <- (bxy * bgx + alpha) / bgx
+bxyhat
+bxye
+```
+
+qj
+
+```{r}
+qj <- w * (bxy - lm(y ~ g)$coef[2] / lm(x ~ g)$coef[2])^2
+qje <- bgx ^2 / (1 / (n * 2 * p * (1-p))) * ((bxy * bgx + alpha) / bgx - bxy)^2
+qj
+qje
+alpha^2 / (1 / (n * 2 * p * (1-p)))
+alpha^2 * (n * 2 * p * (1-p))
+```
+
+
+
+
+
+```{r}
+library(dplyr)
+simulate_snps <- function(nrare, ncommon, nid) {
+    g_common <- lapply(1:ncommon, \(i) {
+        rbinom(nid, 2, runif(1, 0.2, 0.8))
+    }) %>% do.call(cbind, .)
+    g_rare <- lapply(1:ncommon, \(i) {
+        rbinom(nid, 2, runif(1, 0.001, 0.005))
+    }) %>% do.call(cbind, .)
+    return(list(g_common=g_common, g_rare=g_rare))
+}
+
+g <- simulate_snps(10, 10, 10000)
+str(g)
+
+simulate_traits <- function(nlatent, g) {
+
+}
+```
+
+
