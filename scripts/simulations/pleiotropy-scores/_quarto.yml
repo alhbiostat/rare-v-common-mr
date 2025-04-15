@@ -1,0 +1,6 @@
+project:
+  output-dir: ../../../docs
+
+format: 
+  html:
+    self-contained: true  # Embed all resources, preventing `_files`
