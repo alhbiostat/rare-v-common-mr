@@ -2,12 +2,20 @@
 title: Simulations to develop pleiotropy scores that are comparable across allele frequency ranges and with correlated traits
 ---
 
+## Summary
+
+- We want to examine if variants are more pleiotropic when their frequencies are more common
+- Pleiotropy here can be constrained to be something like 'the degre to which it contributes heterogeneity in an MR study'
+- As variant effects on X get larger, the pleiotropic effect needs to be larger in order to contribute the same amount of heterogeneity
+- As allele frequencies get lower, the variant effects on X need to get larger in order to be detectable
+- Therefore, to examine whether the pleiotropic effect of a variant changes with respect to allele frequency, its effect on other traits must be increasing relative to its effect on the hypothesised X being used in an MR analysis
+
+
 ## Background
 
 - Simulate a set of $L$ latent traits, that each have a set of $C_l$ correlated traits
 - One trait is the exposure $X$
 - $G$ variants associate with some number of $L$ latent traits, i.e. their true pleiotropy scores are equal, but their allele frequencies differ making 
-
 
 ## How to simulate pleiotropic effects
 
@@ -24,38 +32,76 @@ where S is the selection coefficient. This is a trait specific model would need 
 Under the pleiotropy term $\alpha_j$ associates as:
 
 $$
-\beta_{gy, j} = \alpha_j + \beta_{gx, j}
+\beta_{gy, j} = \alpha_j + \beta_{gx, j} \beta
 $$
 
-In order for it to meaningfully impact bias in MR, does $\alpha_j$ need to increase as $\beta_{gx, j}$ increases?
+where 
+
+- $j$ represents the variant out of $M$ total instruments
+- $\beta_{gy, j}$ is the effect estimate of the variant $j$ on the outcome
+- $\beta_{gx, j}$ is the effect estimate of the variant $j$ on the exposure
+- $\alpha_j$ is the pleiotropic effect of the variant (i.e. it's influence on the outcome that is not through $x$).
+
+In order for it to meaningfully impact bias in MR, does $\alpha_j$ need to increase as $\beta_{gx, j}$ increases? This can be shown as the causal effect estimate from the $j$th variant as
+
+$$
+\begin{aligned}
+\hat{\beta_j} &= \frac{\beta_{gy,j} + \alpha_j}{\beta_{gx,j}} \\ 
+&= \frac{\beta_{gx,j}\beta + \alpha_j}{\beta_{gx,j}} \\
+&= \beta + \frac{\alpha_j}{\beta_{gx,j}}
+\end{aligned}
+$$
+
 
 ### Relationship between $\beta_{gx, j}$, $\alpha_j$ and $Q_j$
 
-Simulate summary statistics for bgx and bgy. How does alpha increase as bgx increases to keep constant Qj?
+The overall Cochran's Q statistic for heterogeneity of MR estimates is obtained from 
 
-How does MR bias change?
+$$
+Q = \sum^M_{j=1} Q_j
+$$
 
+The contribution of a single variant to the overall heterogeneity is
 
+$$
+\begin{aligned}
+Q_j &= w_j (\beta - \hat{\beta}_j)^2 \\
+&= \frac{\beta_{gx,j}^2} {2 p_j(1-p_j) N} \left(\frac{\alpha_j}{\beta_{gx,j}}\right)^2 \\
+&= \frac{\alpha_j^2}{2 p_j(1-p_j) N}
+\end{aligned}
+$$
+
+where
+
+- $p_j$ is the allele frequency at the $j$th variant
+- $N$ is the sample size
+- $w_j$ is the weight of the contribution of a single variant to overall heterogeneity as
+- $Q_j$ is $\chi^2$ distributed with 1 d.f.
+
+$$
+\begin{aligned}
+w_j &= \frac{\beta_{gx,j}^2}{\sigma^2_j} \\
+&= \frac{\beta_{gx,j}^2}{2 p_j(1-p_j) N}
+\end{aligned}
+$$
+
+and the (approximate) variance of the effect estimate for $\beta_{gx,j}$ and $\beta_{gy,j}$, assuming the variance explained in the trait is small and that the variance of the traits $x$ and $y$ are both 1, is:
 
 $$
 \sigma^2_j = \frac{1}{2 p_j(1-p_j) N}
 $$
 
-$$
-w_j = \beta_{gx,j}^2/\sigma^2_j = \beta_{gx,j}^2 / 2 p_j(1-p_j) N
-$$
+Simulate summary statistics for bgx and bgy. How does alpha increase as bgx increases to keep constant Qj?
+
+Note that $\alpha_j$ also changes the bias in the MR estimate at a rate of $\alpha_j / \beta_{gx,j}$. How $\alpha_j$ influences overall $Q$ or overall $\hat{\beta}$ depends on the number of other variants and their strengths of association, so it's a less self-contained expression.
+
+### Relationship between pleiotropy and power to detect instruments
 
 $$
-Q_j = w_j (\beta - \hat{\beta}_j)^2 = \frac{\beta_{gx,j}^2} {2 p_j(1-p_j) N} (\frac{\alpha_j}{\beta_{gx,j}})^2
-$$
-
-
-$$
-z_j = \beta_{gx,j} / \sigma_j = \beta_{gx,j} * 2 p_j(1-p_j) N
-$$
-
-$$
-\beta_j = \beta_{gy,j} / \beta_{gx,j} = \frac{\beta  \beta_{gx,j} + \alpha_j} {\beta_{gx,j}}
+\begin{aligned}
+z_j &= \frac{\beta_{gx,j} }{\sigma_j} \\
+&= 2 p_j(1-p_j) N \beta_{gx,j} 
+\end{aligned}
 $$
 
 How does $\alpha_j$ change as $p_j$ changes?
@@ -64,14 +110,13 @@ $$
 \alpha_j = \sqrt{\frac{Q_j}{2 p_j(1-p_j) N}}
 $$
 
-Choose $z_j = \sqrt{30}$ to represent a GWAS significant threshold of $p = 5e^{-8}$, and choose $Q_j = 6.63$ to represent detection of heterogeneity at $p = 0.01$, sample size = 500000.
+Choose $z_j = \sqrt{30}$ to represent a GWAS significant threshold of $p = 5e^{-8}$, and choose $Q_j = 6.63$ to represent detection of heterogeneity at $p = 0.01$, sample size $N = 500000$. Simulate different frequency variants that have same level of heterogeneity and the same strength of association with the exposure
 
 ```{r}
 p_j <- runif(100, 0.001, 0.1)
 Q_j <- qchisq(0.01, 1, low=F)
 N <- 500000
 alpha_j <- sqrt(Q_j / (2 * p_j * (1-p_j) * N))
-
 plot(alpha_j ~ p_j)
 plot(alpha_j ~ log(p_j))
 ```
@@ -82,13 +127,20 @@ $$
 \beta_{gx,j} = \frac{z_j} {2N p_j(1-p_j)}
 $$
 
-Check
+```{r}
+beta_gxj <- sqrt(30) / (2 * N * p_j * (1-p_j))
+plot(alpha_j ~ beta_gxj)
+```
+
+
+## Check equations
 
 
 ```{r}
-n <- 500000
+set.seed(1234)
+n <- 1000000
 bgx <- 0.2
-bxy <- 0.6
+bxy <- 0.3
 alpha <- 0.2
 p <- 0.05
 g <- rbinom(n, 2, p)
@@ -117,6 +169,7 @@ w <- lm(x ~ g)$coef[2]^2 / summary(lm(y ~ g))$coef[2,2]^2
 we <- bgx ^2 / (1 / (n * 2 * p * (1-p)))
 w
 we
+bgx^2 * n * 2 * p * (1-p)
 ```
 
 bxy
@@ -144,28 +197,6 @@ alpha^2 * (n * 2 * p * (1-p))
 
 
 
-```{r}
-library(dplyr)
-simulate_snps <- function(nrare, ncommon, nid) {
-    g_common <- lapply(1:ncommon, \(i) {
-        rbinom(nid, 2, runif(1, 0.2, 0.8))
-    }) %>% do.call(cbind, .)
-    g_rare <- lapply(1:ncommon, \(i) {
-        rbinom(nid, 2, runif(1, 0.001, 0.005))
-    }) %>% do.call(cbind, .)
-    return(list(g_common=g_common, g_rare=g_rare))
-}
-
-g <- simulate_snps(10, 10, 10000)
-str(g)
-
-simulate_traits <- function(nlatent, g) {
-
-}
-```
-
-
-
 
 
 ## Strategy
@@ -176,6 +207,75 @@ We don't know that a pleiotropic effect is exactly alpha, because alpha is a com
 
 For a given SNP, we get its pleiotropy profile. We know how much alpha needs to increase as frequency goes down or exposure effect goes up in order to maintain the same level MR disruption.
 
-Does the estimated distribution of MR disruption stay the same as the frequency changes?
+Empirical question: For any instrument obtain the distribution of pleiotropy effects. Does the estimated distribution of MR disruption stay the same as the frequency changes / $\beta_{gx}$ effect sizes get larger?
 
+
+
+
+
+
+
+```{r}
+library(dplyr)
+simulate_snps <- function(nrare, ncommon, nid) {
+    g_common <- lapply(1:ncommon, \(i) {
+        rbinom(nid, 2, runif(1, 0.2, 0.8))
+    }) %>% do.call(cbind, .)
+    g_rare <- lapply(1:ncommon, \(i) {
+        rbinom(nid, 2, runif(1, 0.001, 0.01))
+    }) %>% do.call(cbind, .)
+    return(cbind(g_common, g_rare))
+}
+
+g <- simulate_snps(1, 1, 500000)
+
+simulate_traits <- function(nlatent, g) {
+
+    nid <- nrow(g)
+    nsnp <- ncol(g)
+    p <- apply(g, 2, mean) / 2
+    z_j <- sqrt(30)
+    varxn <- 2 * p * (1-p) * nid
+    b_gx <- z_j / sqrt(varxn)
+    qj <- qchisq(0.01, 1, low=F)
+    alpha <- sqrt(qj / varxn)
+    b_ly <- rnorm(nlatent, sd=sqrt(0.05)/nlatent)
+
+    l <- lapply(1:nlatent, \(i) {
+        b_gl <- alpha / b_ly[i]
+        prs <- g %*% b_gl
+        e <- rnorm(nid, 0, sqrt(1-var(prs)))
+        l <- prs + e
+        return(l)
+    }) %>% do.call(cbind, .)
+
+    prs <- g %*% b_gx
+    e <- rnorm(nid, 0, sqrt(1-var(prs)))
+    x <- prs + e
+    L <- l %*% b_ly + x * 0.1
+    e <- rnorm(nid, 0, sqrt(1-var(L)))
+    y <- L + e
+
+    bgxhat <- lapply()
+
+}
+```
+
+
+```{r}
+# str(g)
+# dim(g)
+
+# prs <- g %*% b_gx
+# resid <- rnorm(length(prs), 0, sqrt(1-var(prs)))
+# var(resid)
+# dim(prs)
+# length(resid)
+# y <- prs + resid
+# summary(lm(y ~ g[,1]))
+# summary(lm(y ~ g[,2]))
+
+# nlatent <- 10
+
+```
 
