@@ -143,6 +143,7 @@ alpha^2 * (n * 2 * p * (1-p))
 
 
 
+
 ```{r}
 library(dplyr)
 simulate_snps <- function(nrare, ncommon, nid) {
@@ -162,5 +163,19 @@ simulate_traits <- function(nlatent, g) {
 
 }
 ```
+
+
+
+
+
+## Strategy
+
+For a given variant, we know that the magnitude of its pleiotropy will relate to its effect size. A larger effect size requires a larger alpha to give equivalent bias / heterogeneity in MR. We also know that larger effect sizes will relate to allele frequency. 
+
+We don't know that a pleiotropic effect is exactly alpha, because alpha is a combination of the SNP effect on the pleiotropy trait, the pleiotropy trait's effect on the outcome. We know the quantity for the first term, but getting the second term is a bit harder (though not impossible). We can approximate alpha to be just the first term, its effect on the other trait.
+
+For a given SNP, we get its pleiotropy profile. We know how much alpha needs to increase as frequency goes down or exposure effect goes up in order to maintain the same level MR disruption.
+
+Does the estimated distribution of MR disruption stay the same as the frequency changes?
 
 
