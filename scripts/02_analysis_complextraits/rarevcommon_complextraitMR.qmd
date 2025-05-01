@@ -15,10 +15,10 @@ format:
 #| message: FALSE
 #| echo: FALSE
 
-library(dotenv)
 library(here)
 library(dplyr)
 library(ggplot2)
+library(dotenv)
 
 dotenv::load_dot_env(file = here("config.env"))
 data_dir <- Sys.getenv("data_dir")
@@ -137,6 +137,65 @@ for(i in 1:length(harmonised_studies)){
 
 harmonised_studies <- harmonised_studies[keep_top]
 
+# Add columns with trait pairing and instrument class
+for(i in 1:length(harmonised_studies)){
+  for(j in 1:length(harmonised_studies[[i]])){
+    harmonised_studies[[i]][j][[1]]$pair <- names(harmonised_studies)[i]
+    harmonised_studies[[i]][j][[1]]$class <- as.character(instrument_class[names(harmonised_studies[[i]][j])])
+  }
+}
+
+```
+
+Add gene annotations for instruments (taken from variant/mask position in exome data for ExWAS studies and nearest gene for common variant GWAS studies)
+
+```{r}
+#| label: gene annotation
+
+# Annotate DeepRVAT and burden masks with relevant gene
+# ExWAS single variants are already annotated
+# Annotate common variants with nearest gene based on VEP annotation:
+
+# List of rsIDs to extract from VEP file (using VEP online interface, returning single consequence per variant --pick)
+# common_instruments <- unlist(lapply(harmonised_studies, function(x){
+#   return(x$opengwas_common$SNP)
+# })) |> unique()
+
+# write.table(common_instruments, file.path(data_dir,"variant_annotation","complextrait_openGWASinstruments.txt"), 
+#             row.names = F, col.names = F, quote = F)
+
+vep <- data.table::fread(file.path(data_dir,"variant_annotation","vep_openGWASinstruments.txt")) |>
+  dplyr::filter(grepl("^[0-9]",Location))
+
+## Retain variant annotations for SNPs within 1kb of a protein coding gene only
+vep_coding <- vep |> 
+  filter(BIOTYPE == "protein_coding") |>
+  filter(!(as.numeric(DISTANCE) > 1000) | DISTANCE == "-")
+
+for(i in 1:length(harmonised_studies)){
+  for(j in 1:length(harmonised_studies[[i]])){
+    
+    if(names(harmonised_studies[[i]][j]) == "deeprvat_genescore"){
+      harmonised_studies[[i]][[j]]$gene.exposure = toupper(harmonised_studies[[i]][[j]]$SNP)
+    }
+    
+    else if(names(harmonised_studies[[i]][j]) %in% names(instrument_type[instrument_type == "mask"])){
+      harmonised_studies[[i]][[j]]$gene.exposure = toupper(gsub("_.*","",harmonised_studies[[i]][[j]]$SNP))
+    }
+    
+    else if (names(harmonised_studies[[i]][j]) == "opengwas_common"){
+      gene_symbols <- vep_coding[match(harmonised_studies[[i]][[j]]$SNP, vep_coding$`#Uploaded_variation`),c("SYMBOL","Consequence")] |> as.data.frame()
+      names(gene_symbols) <- c("gene.exposure","vep.consequence")
+      
+      harmonised_studies[[i]][[j]] <- cbind(harmonised_studies[[i]][[j]], gene_symbols)
+    }
+    
+    else{
+      next
+    }
+  }
+}
+
 ```
 
 ### Check instrument selection
@@ -215,6 +274,74 @@ p_beta <- ggplot(instrument_MAFs |> filter(instrument_type == "variant"),
 p_beta
 
 ```
+## Instruments
+
+Are the genes being hit by common and rare variant derived instrument sets for compelx exposures overlapping?
+
+```{r}
+#| label: plot genes
+#| fig-width: 10
+#| fig-height: 28
+
+# Extract the maximal set of gene annotations for each exposure instrument set
+
+instrument_genes <- do.call("rbind", lapply(harmonised_studies, function(x){
+  do.call("rbind", lapply(x, function(y){
+    y[,c("pair","class","gene.exposure")]
+  }))
+})) |> 
+  mutate(exposure = sub("_.*","",pair),
+         hit = 1,
+         class = factor(class, 
+                        levels = c(
+                          "genome:common",
+                          "exome:common","exome:lowfreq",
+                          "exome:rare","exome:rare (top)",
+                          "exome:ultrarare","exome:ultrarare (top)",
+                          "mask:synonymous","mask:missense|LC",
+                          "mask:pLOF|missense|LC","mask:pLOF",
+                          "genescore"))) |>
+  filter(!(class %in% c("exome:rare (top)", "exome:ultrarare (top)"))) |>
+  select(-pair) |> unique()
+rownames(instrument_genes) <- NULL
+
+# Is gene hit by at least one common, rare (or ultra rare) and mask (or genescore)
+instrument_genes <- instrument_genes |>
+  mutate(set = ifelse(class %in% c("genome:common","exome:common","exome:lowfreq"), "common", 
+                      ifelse(class %in% c("exome:rare","exome:ultrarare"), "rare",
+                             ifelse(grepl("mask|genescore", class), "aggregate", NA))),
+         set_variants = ifelse(class %in% c("genome:common","exome:common","exome:lowfreq"), "common", 
+                      ifelse(class %in% c("exome:rare","exome:ultrarare"), "rare", NA)))
+
+n_sets <- instrument_genes |> group_by(gene.exposure, exposure, set) |> summarise(count = n()) |> 
+  group_by(gene.exposure,exposure) |> summarise(count_sets = n())
+n_sets_variants <- instrument_genes |> na.exclude() |> group_by(gene.exposure, exposure, set_variants) |> summarise(count = n()) |> 
+  group_by(gene.exposure,exposure) |> summarise(count_sets_variants = n())
+
+instrument_genes <- left_join(instrument_genes, n_sets, by = c("gene.exposure","exposure")) |>
+  left_join(n_sets_variants, by = c("gene.exposure","exposure")) |>
+  mutate(colour_sets = ifelse(count_sets == 3,1,
+                              ifelse(count_sets < 3 & count_sets_variants == 2,2,3)))
+instrument_genes$colour_sets[is.na(instrument_genes$count_sets_variants)] <- 3
+
+p_genes <- ggplot(instrument_genes, aes(y = gene.exposure, x = class)) +
+  facet_wrap(exposure ~ ., nrow = 1, scale = "free_y") +
+  geom_tile(aes(fill = as.factor(colour_sets))) +
+  scale_fill_manual(values = c("tomato", "orange","darkblue")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        axis.text.y = element_text(size = 5),
+        legend.position = "none",
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Gene containing (or proximal to) instruments for exposures", y = "", x = "Instrument class")
+        
+p_genes
+
+
+```
+
+
+
 ## Mendelian randomisation
 
 ### IVW estimates across instrument sets
