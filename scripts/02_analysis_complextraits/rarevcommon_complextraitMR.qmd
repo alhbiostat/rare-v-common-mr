@@ -480,14 +480,14 @@ gridExtra::grid.arrange(p_genes_shared, p_ivw_shared, nrow = 1, widths = c(0.4,0
 
 ### Comparison of Wald Ratio (subsetting to shared genes)
 
-A comparison of Wald ratios retuned for common and rare instruments that are hitting the same genes
+There are a limited number of common and rare variants for the tested complex exposures that are annotated to the same genes (this will be a more useful analysis to do for molecular traits). For genes which are shared, there are several cases where rare variants within a given gene are having disperate outcome effects. For example, rare variants in the *APOB* gene which are positively associated with LDL levels are showing either positive or negative effects on risk of T2D. This could potentially be due to the pleiotropic action of the APOB protein in distinct biological pathways, the relevant functional attributes of which may be differentially impacted by distruptive rare variants across the coding region...
 
 ```{r}
 #| label: shared genes wald ratios
 #| fig-width: 14
 #| fig-height: 8
 
-lapply(results_MR_sharedgenes_SNP, function(x){range(x$b)})
+#lapply(results_MR_sharedgenes_SNP, function(x){range(x$b)})
 
 plot_wald <- function(snp_results, set_1, set_2){
 
