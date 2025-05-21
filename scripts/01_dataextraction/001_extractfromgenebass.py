@@ -57,6 +57,7 @@ target_studies = {'30780',
                   '30010',
                   '30040',
                   '30100',
+                  '4080',
                   'CAD_custom',
                   '130708',
                   'MS_custom',
@@ -64,46 +65,52 @@ target_studies = {'30780',
                   'VTE_custom',
                   'ProstateCancer_custom',
                   '131286',
-                  'Ischemic_stroke_custom'}
+                  'Ischemic_stroke_custom',
+                  '131036'}
 
 mt_set = mt.filter_cols(hl.literal(target_studies).contains(mt.phenocode))
 mt_gene_set = mt_gene.filter_cols(hl.literal(target_studies).contains(mt_gene.phenocode))
 
 for key in range(3,len(target_studies)+1):
-	col_key = mt_set.cols().take(key)[key-1]
+  col_key = mt_set.cols().take(key)[key-1]
 
-	mt_study = mt_set.filter_cols(
-		(mt_set.trait_type == col_key['trait_type']) &
-		(mt_set.phenocode == col_key['phenocode']) &
-		(mt_set.pheno_sex == col_key['pheno_sex']) &
-		(mt_set.coding == col_key['coding']) &
-		(mt_set.modifier == col_key['modifier']))
+  mt_study = mt_set.filter_cols(
+    (mt_set.trait_type == col_key['trait_type']) &
+    (mt_set.phenocode == col_key['phenocode']) &
+    (mt_set.pheno_sex == col_key['pheno_sex']) &
+    (mt_set.coding == col_key['coding']) &
+    (mt_set.modifier == col_key['modifier']))
 
-	mt_study_gene = mt_gene_set.filter_cols(
-		(mt_gene_set.trait_type == col_key['trait_type']) &
-		(mt_gene_set.phenocode == col_key['phenocode']) &
-		(mt_gene_set.pheno_sex == col_key['pheno_sex']) &
-		(mt_gene_set.coding == col_key['coding']) &
-		(mt_gene_set.modifier == col_key['modifier']))
+  mt_study_gene = mt_gene_set.filter_cols(
+    (mt_gene_set.trait_type == col_key['trait_type']) &
+    (mt_gene_set.phenocode == col_key['phenocode']) &
+    (mt_gene_set.pheno_sex == col_key['pheno_sex']) &
+    (mt_gene_set.coding == col_key['coding']) &
+    (mt_gene_set.modifier == col_key['modifier']))
 
-	desc =  mt_study.cols().select('description').collect()[0].description
-	
-	if col_key['phenocode'] == 'Ischemic_stroke_custom':
-		desc = ''
+  desc =  mt_study.cols().select('description').collect()[0].description
+  
+  if col_key['phenocode'] == 'Ischemic_stroke_custom':
+    desc = ''
 
-	print("pheno:", desc)
+  print("pheno:", desc)
 
-	outname = "".join(["genebass_ukbwes_","p",col_key['phenocode'], "_", desc.replace(" ","_").replace("(", "").replace(")", ""), ".tsv"])
-	outname_gene = "".join(["genebass_ukbwes_","p",col_key['phenocode'], "_", desc.replace(" ","_").replace("(", "").replace(")", ""), "_genetest.tsv"])
+  outname = "".join(["genebass_ukbwes_","p",col_key['phenocode'], "_", desc.replace(" ","_").replace("(", "").replace(")", ""), ".tsv"])
+  outname_gene = "".join(["genebass_ukbwes_","p",col_key['phenocode'], "_", desc.replace(" ","_").replace("(", "").replace(")", ""), "_genetest.tsv"])
 
-    # Extract summary statistics (variant level)
-	study_stats = mt_study.entries()
-    # Extract summary statistics (gene level)
-	study_stats_gene = mt_study_gene.entries()
+  # Check if output file exists, skip if so
+  if os.path.exists(os.path.join(OUT_DIR,"sumstats","genebass",outname)):
+    print(f"File {outname} exists, skipping.")
+    continue
 
-    # Write out rare summary statistics 
-	print("Writing to:", os.path.join(OUT_DIR,"genebass",outname))
-	study_stats.export(os.path.join(OUT_DIR,"genebass",outname))
+  # Extract summary statistics (variant level)
+  study_stats = mt_study.entries()
+  # Extract summary statistics (gene level)
+  study_stats_gene = mt_study_gene.entries()
 
-	print("Writing to:", os.path.join(OUT_DIR,"genebass",outname_gene))
-	study_stats_gene.export(os.path.join(OUT_DIR,"genebass",outname_gene))
+  # Write out rare summary statistics 
+  print("Writing to:", os.path.join(OUT_DIR,"sumstats","genebass",outname))
+  study_stats.export(os.path.join(OUT_DIR,"sumstats","genebass",outname))
+
+  print("Writing to:", os.path.join(OUT_DIR,"sumstats","genebass",outname_gene))
+  study_stats_gene.export(os.path.join(OUT_DIR,"sumstats","genebass",outname_gene))

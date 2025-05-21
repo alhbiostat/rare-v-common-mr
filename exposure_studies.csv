@@ -9,6 +9,7 @@ genebass_ukbwes_p30770_IGF-1.tsv,IGF1,genebass,variant
 genebass_ukbwes_pWHRadjBMI_custom_Waist-to-hip_ratio_adjusted_for_body_mass_index_WHRadjBMI.tsv,WHRadjBMI,genebass,variant
 genebass_ukbwes_p30010_Red_blood_cell_erythrocyte_count.tsv,RBCcount,genebass,variant
 genebass_ukbwes_p30040_Mean_corpuscular_volume.tsv,CorpVol,genebass,variant
+genebass_ukbwes_p4080_Systolic_blood_pressure_automated_reading.tsv,SBP,genebass,variant
 genebass_ukbwes_p30780_LDL_direct_genetest.tsv,LDL,genebass,mask
 genebass_ukbwes_p21001_Body_mass_index_BMI_genetest.tsv,BMI,genebass,mask
 genebass_ukbwes_p30890_Vitamin_D_genetest.tsv,VitD,genebass,mask
@@ -19,6 +20,7 @@ genebass_ukbwes_p30770_IGF-1_genetest.tsv,IGF1,genebass,mask
 genebass_ukbwes_pWHRadjBMI_custom_Waist-to-hip_ratio_adjusted_for_body_mass_index_WHRadjBMI_genetest.tsv,WHRadjBMI,genebass,mask
 genebass_ukbwes_p30010_Red_blood_cell_erythrocyte_count_genetest.tsv,RBCcount,genebass,mask
 genebass_ukbwes_p30040_Mean_corpuscular_volume_genetest.tsv,CorpVol,genebass,mask
+genebass_ukbwes_p4080_Systolic_blood_pressure_automated_reading_genetest.tsv,SBP,genebass,mask
 ieu-b-110,LDL,opengwas,variant
 ukb-b-19953,BMI,opengwas,variant
 ebi-a-GCST90000615,VitD,opengwas,variant
@@ -29,6 +31,7 @@ ebi-a-GCST90014008,IGF1,opengwas,variant
 ieu-a-79,WHRadjBMI,opengwas,variant
 ebi-a-GCST90013977,RBCcount,opengwas,variant
 ebi-a-GCST90013979,CorpVol,opengwas,variant
+ukb-b-20175,SBP,opengwas,variant
 deeprvat_LDL_direct.csv,LDL,deeprvat,genescore
 deeprvat_BMI.csv,BMI,deeprvat,genescore
 deeprvat_Vitamin_D.csv,VitD,deeprvat,genescore

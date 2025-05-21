@@ -2,6 +2,11 @@
 # Author: A.L.Hanson
 # Purpose: Read in harmonised summary statistics across exposure-outcome pairs, perform MR and output results
 
+## CONTINUE:
+# Check formatting of harmonised_studies object in the absence of deepRVAT results
+# Add new harmonised results to harmonised_studies object and save
+# Run MR or new harmonised studies and append to results_MR object
+
 library(dotenv)
 library(here)
 library(dplyr)
@@ -15,11 +20,38 @@ res_dir <- Sys.getenv("results_dir")
 
 filelist <- list.files(path = file.path(data_dir, "harmonised"), pattern = ".rda")
 
-# Exposure - outcome study pairs
-study_pairs <- sub("^.*_.*_(.*_.*).rda","\\1",filelist) |> unique()
+if("harmonised_studies.rda" %in% filelist){
 
-harmonised_studies <- as.list(rep(NA, length(study_pairs)))
-names(harmonised_studies) <- study_pairs
+  # Load previous harmonised_studies object to append to
+  load(file.path(data_dir, "harmonised", "harmonised_studies.rda"))
+  harmonised_studies_old <- harmonised_studies
+
+  filelist <- filelist[!(grepl("harmonised_studies", filelist))]
+
+  # If new study pairs exist that are not in harmonised_studies_old:
+  # Exposure - outcome study pairs
+  study_pairs <- sub("^.*_.*_(.*_.*).rda","\\1",filelist) |> unique()
+  # New study pairs
+  study_pairs <- study_pairs[!(study_pairs %in% names(harmonised_studies_old))]
+
+  if(length(study_pairs) == 0){
+    message("No new study pairs to harmonise")
+  }else{
+    message("New studies to harmonise: ", paste(study_pairs, collapse = ", "))
+    # Copy original harmonised_studies object to backup
+    file.copy(file.path(data_dir, "harmonised", "harmonised_studies.rda"), 
+            file.path(data_dir, "harmonised", paste0("harmonised_studies_backup_", Sys.Date(), ".rda")))
+    # New harmonised_studies object
+    harmonised_studies <- as.list(rep(NA, length(study_pairs)))
+    names(harmonised_studies) <- study_pairs
+  }
+}else{
+  # Exposure - outcome study pairs
+  study_pairs <- sub("^.*_.*_(.*_.*).rda","\\1",filelist) |> unique()
+
+  harmonised_studies <- as.list(rep(NA, length(study_pairs)))
+  names(harmonised_studies) <- study_pairs
+}
 
 for (pair in study_pairs){
   files <- file.path(data_dir,"harmonised", 
@@ -56,6 +88,12 @@ for (pair in study_pairs){
       names(obj4) <- paste0("opengwas_common")
     }
   }
+
+  # If no deepRVAT results for study pair, set to empty list
+  if(!exists("obj1")){
+    obj1 <- list(data.frame())
+    names(obj1) <- "deeprvat_genescore"
+  }
   
   out_studies <- c(obj1,obj2,obj3,obj4)
   
@@ -90,12 +128,44 @@ names(instrument_class) <- names(harmonised_studies[[1]])
 
 rm(obj,obj1,obj2,obj3,obj4,out_studies)
 
-## Write out harmonised_study object
-save(harmonised_studies, file = file.path(data_dir, "harmonised", "harmonised_studies.rda"))
+## Append new harmonised studies to existing object
+if(exists("harmonised_studies_old")){
+  harmonised_studies <- c(harmonised_studies_old, harmonised_studies)
+  # Reorder studies
+  order_studies <- names(harmonised_studies)[order(names(harmonised_studies))]
+  harmonised_studies <- harmonised_studies[order_studies]
+
+  ## Write out harmonised_study object
+  save(harmonised_studies, file = file.path(data_dir, "harmonised", "harmonised_studies.rda"))
+}else{
+  ## Write out harmonised_study object
+  save(harmonised_studies, file = file.path(data_dir, "harmonised", "harmonised_studies.rda"))
+}
 
 # Perform MR on each exposure-outcome pair, across each of 12 instrument sets
-results_MR <- list()
 
+# Check if MR results already exist
+if(file.exists(file.path(res_dir, "results_complextrait_MR.rda"))){
+  load(file.path(res_dir, "results_complextrait_MR.rda"))
+  results_MR_old <- results_MR
+
+  # If new study pairs exist that are not in results:
+  study_pairs <- names(results_MR_old)
+  # New study pairs
+  study_pairs <- names(harmonised_studies)[!(names(harmonised_studies) %in% study_pairs)]
+
+  if(length(study_pairs) == 0){
+    message("No new study pairs to analyse")
+  }else{
+    message("New studies to analyse: ", paste(study_pairs, collapse = ", "))
+    harmonised_studies <- harmonised_studies[study_pairs]
+    results_MR <- list()
+  }
+}else{
+  results_MR <- list()
+}
+
+# Analyse each (new) study pair
 for(i in 1:length(harmonised_studies)){
   
   res_list <- list()
@@ -135,4 +205,16 @@ for(i in 1:length(harmonised_studies)){
 
 names(results_MR) <- names(harmonised_studies)
 
-save(results_MR, file = file.path(res_dir, "results_complextrait_MR.rda"))
+## Append new results to existing results_MR object
+if(exists("results_MR_old")){
+  results_MR <- c(results_MR_old, results_MR)
+  # Reorder studies
+  order_studies <- names(results_MR)[order(names(results_MR))]
+  results_MR <- results_MR[order_studies]
+  
+  ## Write out results_MR object
+  save(results_MR, file = file.path(res_dir, "results_complextrait_MR.rda"))
+}else{
+  ## Write out harmonised_study object
+  save(results_MR, file = file.path(res_dir, "results_complextrait_MR.rda"))
+}

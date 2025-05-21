@@ -101,8 +101,11 @@ main <- function(exposure_study, outcome_study, class) {
     # Extract variants from outcome study and harmonise
     dat_harmonised <- lapply(exposure_finalset,
       function(x){
-        TwoSampleMR::harmonise_data(exposure_dat = x, outcome_dat = outcome_formatted)
-      })
+        if(nrow(x)==0){
+          return(data.frame())
+        }else{
+          TwoSampleMR::harmonise_data(exposure_dat = x, outcome_dat = outcome_formatted)
+        }})
     names(dat_harmonised) <- c("common", "lowfreq", "rare", "ultrarare", "rare_filt", "ultrarare_filt")
 
     message("Final instrument count:")
@@ -216,17 +219,21 @@ exp_format <- function(exposure_df, maf_range, pval){
     filter((AF > maf_range[1] & AF <= maf_range[2]) | (1-AF > maf_range[1] & 1-AF <= maf_range[2])) |>
     filter(Pvalue < pval) |> # Theshold from Genebass paper
     pull(markerID)
-  
-  exposure_formatted <- TwoSampleMR::format_data(exposure_df |> filter(markerID %in% snps_keep),
-                                   type = "exposure",
-                                   phenotype_col = "description",
-                                   snp_col = "SNP",
-                                   beta_col = "BETA",
-                                   se_col = "SE",
-                                   eaf_col = "AF",
-                                   effect_allele_col = "effect_allele",
-                                   other_allele_col = "other_allele",
-                                   pval_col = "Pvalue")
+
+  if(length(snps_keep) == 0){
+    exposure_formatted <- data.frame()
+  }else{
+    exposure_formatted <- TwoSampleMR::format_data(exposure_df |> filter(markerID %in% snps_keep),
+                                    type = "exposure",
+                                    phenotype_col = "description",
+                                    snp_col = "SNP",
+                                    beta_col = "BETA",
+                                    se_col = "SE",
+                                    eaf_col = "AF",
+                                    effect_allele_col = "effect_allele",
+                                    other_allele_col = "other_allele",
+                                    pval_col = "Pvalue")
+  }
   return(exposure_formatted)
 }
 
@@ -300,12 +307,15 @@ perform_clumping <- function(exposure_df){
 }
 
 keeptop_rare <- function(exposure_df){
-  
-  exposure_filt <- exposure_df |> 
-    arrange(gene.exposure, pval.exposure) |> 
-    filter(duplicated(gene.exposure) == FALSE) |> 
-    arrange(chr.exposure, as.numeric(pos.exposure))
-  
+
+  if(nrow(exposure_df) == 0){
+    exposure_filt <- data.frame()
+  }else{
+    exposure_filt <- exposure_df |> 
+      arrange(gene.exposure, pval.exposure) |> 
+      filter(duplicated(gene.exposure) == FALSE) |> 
+      arrange(chr.exposure, as.numeric(pos.exposure))
+  }
   return(exposure_filt)
 }
 
