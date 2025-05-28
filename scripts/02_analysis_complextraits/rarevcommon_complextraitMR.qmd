@@ -34,9 +34,9 @@ Classically, Mendelian Randomisation (MR) methods utilising trait-associated gen
 
 Causal estimates for pairwise combinations of the exposure and outcome relationships below have been derived using twelve instrumentation strategies.
 
-**Exposures:** Low density lipoprotein levels (LDL direct), Body Mass Index (BMI), Vitamin D, Triglycerides, Glycated Haemoglobin (HbA1c), Mean Platelet Volume (MPV), IGF-1, Waist-to-Hip Ratio (BMI-corrected), Red Blood Cell (RBC) erythrocyte count and Mean Corpuscular Volume (MCV)
+**Exposures:** Low density lipoprotein levels (LDL direct), Body Mass Index (BMI), Vitamin D, Triglycerides, Glycated Haemoglobin (HbA1c), Mean Platelet Volume (MPV), IGF-1, Waist-to-Hip Ratio (BMI-corrected), Red Blood Cell (RBC) Erythrocyte Count, Mean Corpuscular Volume (MCV) and Systolic Blood Pressure (SBP)
 
-**Outcomes:** Coronary Artery Disease (CAD), Type 2 Diabetes (T2D), Multiple Sclerosis (MS), Ischemic Stroke, Atrial Fibrillation (AF), Venous Thromboembolism (VTE), Prostate Cancer and Hypertension.
+**Outcomes:** Coronary Artery Disease (CAD), Type 2 Diabetes (T2D), Multiple Sclerosis (MS), Ischemic Stroke, Atrial Fibrillation (AF), Venous Thromboembolism (VTE), Prostate Cancer, Hypertension and Alzheimer's Disease (AD).
 
 ### Instruments
 
@@ -91,7 +91,8 @@ keep_pairs <- keep_pairs[!(grepl("^BMI",keep_pairs))] # 44 exposure-outcome pair
 # Top interesting
 keep_top <- c(
   "HbA1c_CHD", "HbA1c_T2D", "LDL_CHD", "LDL_MS", "LDL_T2D", "Trig_CHD", 
-  "Trig_T2D", "WHRadjBMI_CHD", "WHRadjBMI_Hypertension", "WHRadjBMI_T2D")
+  "Trig_T2D", "WHRadjBMI_CHD", "WHRadjBMI_Hypertension", "WHRadjBMI_T2D",
+  "SBP_Stroke")
 
 res_MR <- res_MR[keep_top]
 
@@ -164,7 +165,7 @@ Add gene annotations for instruments (taken from variant/mask position in exome 
 #   return(x$opengwas_common$SNP)
 # })) |> unique()
 
-# write.table(common_instruments, file.path(data_dir,"variant_annotation","complextrait_openGWASinstruments.txt"), 
+# write.table(common_instruments, file.path(data_dir,"variant_annotation","complextrait_openGWASinstruments.txt"),
 #             row.names = F, col.names = F, quote = F)
 
 vep <- data.table::fread(file.path(data_dir,"variant_annotation","vep_openGWASinstruments.txt")) |>
@@ -349,7 +350,7 @@ p_genes
 
 ```{r}
 #| label: forest plots
-#| fig-width: 12
+#| fig-width: 13
 #| fig-height: 6
 
 res_IVW <- do.call("rbind", res_MR) |> filter(method == "Inverse variance weighted") |>
@@ -400,7 +401,7 @@ p_genes_shared <- ggplot(shared_genes,
         plot.title = element_text(hjust = 0.5)) +
   labs(title = "Gene containing (or proximal to) instruments for exposures", y = "", x = "Instrument class")
         
-harmonised_studies_sharedgenes <- harmonised_studies[grepl("HbA1c|LDL|Trig", names(harmonised_studies))] # Subset exposures
+harmonised_studies_sharedgenes <- harmonised_studies[grepl("HbA1c|LDL|Trig|SBP", names(harmonised_studies))] # Subset exposures
 harmonised_studies_sharedgenes <- lapply(harmonised_studies_sharedgenes, function(x){
   x[which(names(x) %in% c("opengwas_common", "genebass_common", "genebass_rare","genebass_pLoF|missense|LC"))]}) # Subset instrument sets
 
@@ -413,6 +414,9 @@ harmonised_studies_sharedgenes[c("LDL_CHD","LDL_MS","LDL_T2D")] <- lapply(harmon
 })
 harmonised_studies_sharedgenes[c("Trig_CHD","Trig_T2D" )] <- lapply(harmonised_studies_sharedgenes[c("Trig_CHD","Trig_T2D" )], function(x){
   lapply(x, function(y){y |> filter(gene.exposure %in% (shared_genes |> filter(exposure == "Trig") |> pull(gene.exposure)))})
+})
+harmonised_studies_sharedgenes["SBP_Stroke"] <- lapply(harmonised_studies_sharedgenes["SBP_Stroke"], function(x){
+  lapply(x, function(y){y |> filter(gene.exposure %in% (shared_genes |> filter(exposure == "SBP") |> pull(gene.exposure)))})
 })
 
 # Run MR on restricted instrument set
@@ -477,7 +481,6 @@ gridExtra::grid.arrange(p_genes_shared, p_ivw_shared, nrow = 1, widths = c(0.4,0
 
 ```
 
-
 ### Comparison of Wald Ratio (subsetting to shared genes)
 
 There are a limited number of common and rare variants for the tested complex exposures that are annotated to the same genes (this will be a more useful analysis to do for molecular traits). For genes which are shared, there are several cases where rare variants within a given gene are having disperate outcome effects. For example, rare variants in the *APOB* gene which are positively associated with LDL levels are showing either positive or negative effects on risk of T2D. This could potentially be due to the pleiotropic action of the APOB protein in distinct biological pathways, the relevant functional attributes of which may be differentially impacted by distruptive rare variants across the coding region...
@@ -491,9 +494,9 @@ There are a limited number of common and rare variants for the tested complex ex
 
 plot_wald <- function(snp_results, set_1, set_2){
 
-  axis_lim <- max(abs(range(snp_results$b))) + 1.5
-
-  dat <- snp_results[,c("b","se","p","pair","class","gene.exposure")]
+  dat <- snp_results[,c("b","se","p","pair","class","gene.exposure")] |> na.exclude()
+  axis_lim <- max(abs(range(dat$b))) + 1.5
+  
   dat <- left_join(dat |> filter(class %in% set_1), dat |> filter(class %in% set_2), by = c("pair", "gene.exposure"), suffix = c(".1",".2")) |> na.exclude()
   dat$gene.exposure <- droplevels(as.factor(dat$gene.exposure))
   
@@ -516,7 +519,7 @@ plot_wald <- function(snp_results, set_1, set_2){
          title = unique(dat$pair))
 }
 
-cowplot::plot_grid(plotlist = lapply(results_MR_sharedgenes_SNP, plot_wald, set_1 = "exome:common", set_2 = "exome:rare"), nrow = 2, align = "h")
+cowplot::plot_grid(plotlist = lapply(results_MR_sharedgenes_SNP, plot_wald, set_1 = "genome:common", set_2 = "exome:rare"), nrow = 2, align = "h")
 
 ```
 
