@@ -1,0 +1,590 @@
+---
+title: "Comparing common and rare single variant and gene aggregate instrumentation strategies for MR"
+author: "Aimee Hanson"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+format: 
+  html:
+    toc: true
+    toc-depth: 4
+    toc-location: left
+    page-layout: article
+    code-fold: true
+---
+
+```{r}
+#| label: setup
+#| message: FALSE
+#| echo: FALSE
+
+library(here)
+library(dplyr)
+library(ggplot2)
+library(dotenv)
+
+dotenv::load_dot_env(file = here("config.env"))
+data_dir <- Sys.getenv("data_dir")
+res_dir <- Sys.getenv("results_dir")
+
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+```
+
+## Introduction
+
+Classically, Mendelian Randomisation (MR) methods utilising trait-associated genetic variants from GWAS studies have employed common polymorphisms (population MAF \> 1%) targeted by genotyping chips, or reliably imputed from reference populations, to instrument modifiable exposures. However, common variants tested in GWAS typically explain a very small fraction of the variability in a measured complex trait, potentially exhibit pleiotropic effects acted upon by balancing selection or as a consequent of genetic linkage, and are rarely causal. Rare variants, which typically show large biological effects (e.g. through abolishing protein expression) provide a means of more unambiguously instrumenting relevant molecular processes. Comparison of causal estimates derived using differing methods of genetically instrumenting modifiable exposures may enhance the interpretation of the biological mechanisms underlying exposure-outcome relationships. This includes using variants from across the allele frequency spectrum, but also leveraging rare variant aggregate approaches to instrument gene-level perturbations in expression and function. 
+
+Causal estimates for pairwise combinations of the exposure and outcome relationships below have been derived using twelve instrumentation strategies.
+
+**Exposures:** Low density lipoprotein levels (LDL direct), Body Mass Index (BMI), Vitamin D, Triglycerides, Glycated Haemoglobin (HbA1c), Mean Platelet Volume (MPV), IGF-1, Waist-to-Hip Ratio (BMI-corrected), Red Blood Cell (RBC) Erythrocyte Count, Mean Corpuscular Volume (MCV) and Systolic Blood Pressure (SBP)
+
+**Outcomes:** Coronary Artery Disease (CAD), Type 2 Diabetes (T2D), Multiple Sclerosis (MS), Ischemic Stroke, Atrial Fibrillation (AF), Venous Thromboembolism (VTE), Prostate Cancer, Hypertension and Alzheimer's Disease (AD).
+
+### Instruments
+
+Twelve sets of instruments for each exposure have been extracted from across three sources (DeepRVAT gene impairment scores, Genebass whole exome single variants and aggregate burden masks and UKB common variant GWAS summary statistics):
+
+**Common GWAS**\
+Associated common variants from UKB GWAS (\>1% MAF)
+
+**Genebass (variants)**\
+Common exome-wide (\>5% MAF, LD clumped)\
+Low-frequency exome-wide (1-5% MAF, LD clumped)\
+Rare exome-wide (0-1% MAF, both unfiltered and filtered to the top hit per gene)\
+Ultra-rare exome-wide (0-0.1% MAF, both unfiltered and filtered to the top hit per gene)
+
+**Genebass (masks)**\
+pLOF burden mask\
+missense/low-confidence burden mask\
+pLOF/missense/low-confidence burden mask\
+synonymous burden mask
+
+**DeepRVAT (impairment scores)**\
+gene impairment score (\<0.1% MAF)
+
+Here the focus is on 10 of the tested exposure-outcome pairs where differing instrumentation strategies show heterogeneity in causal effect estimates.
+
+## Data import
+
+Read in MR results from `scripts/02_analysis_complextraits/001_performMR.R` and harmonised summary statistics:
+
+```{r}
+#| label: import mr results
+
+# Import MR results
+load(file = file.path(res_dir, "results_complextrait_MR.rda"))
+# Import harmonised study data
+load(file = file.path(data_dir, "harmonised", "harmonised_studies.rda"))
+
+# Retain exposure-outcome pairs with significant IVW estimate for at least one instrumentation strategy
+res_MR <- lapply(results_MR, function(x){
+  sig_ivw <- x |> filter(method == "Inverse variance weighted" & pval < 0.05)
+  if(nrow(sig_ivw) == 0){
+    return(NULL)
+  } else {
+    return(x)
+  }
+}) 
+
+keep_pairs <- names(unlist(lapply(res_MR, nrow)))
+# Remove BMI exposure pairs (low instrument numbers)
+keep_pairs <- keep_pairs[!(grepl("^BMI",keep_pairs))] # 44 exposure-outcome pairs
+
+# Top interesting
+keep_top <- c(
+  "HbA1c_CHD", "HbA1c_T2D", "LDL_CHD", "LDL_MS", "LDL_T2D", "Trig_CHD", 
+  "Trig_T2D", "WHRadjBMI_CHD", "WHRadjBMI_Hypertension", "WHRadjBMI_T2D",
+  "SBP_Stroke")
+
+res_MR <- res_MR[keep_top]
+
+# Annotations for study sets
+instrument_type <- c("genescore",rep("mask",4), rep("variant",7))
+names(instrument_type) <- names(harmonised_studies[[1]])
+
+instrument_class <- c("genescore",
+                      "mask:missense|LC","mask:pLOF","mask:pLOF|missense|LC","mask:synonymous",
+                      "exome:common","exome:lowfreq","exome:rare","exome:ultrarare",
+                      "exome:rare (top)","exome:ultrarare (top)","genome:common")
+
+names(instrument_class) <- names(harmonised_studies[[1]])
+
+```
+
+
+```{r}
+#| label: missing mafs
+
+# Populate missing MAFs from other paired studies if possible
+
+all_mafs <- list()
+
+for(i in 1:length(harmonised_studies)){
+  snp_mafs <- do.call("rbind",lapply(harmonised_studies[[i]][names(instrument_type[instrument_type=="variant"])], function(x){
+    x[,c("SNP","effect_allele.exposure","eaf.exposure")]
+  })) |> unique()
+  all_mafs[[i]] <- snp_mafs
+}
+
+all_mafs <- do.call("rbind",all_mafs) |> arrange(SNP) |> filter(!is.na(eaf.exposure), duplicated(SNP) == FALSE)
+
+for(i in 1:length(harmonised_studies)){
+  for(j in 1:length(harmonised_studies[[i]])){
+    
+    snp_id <- harmonised_studies[[i]][[j]]$SNP
+    if (all(is.na(harmonised_studies[[i]][[j]]$eaf.exposure))){
+      harmonised_studies[[i]][[j]]$eaf.exposure <- all_mafs[match(snp_id, all_mafs$SNP),"eaf.exposure"]
+    }
+    if (all(is.na(harmonised_studies[[i]][[j]]$eaf.outcome))){
+      harmonised_studies[[i]][[j]]$eaf.outcome <- all_mafs[match(snp_id, all_mafs$SNP),"eaf.exposure"]
+    }
+  }
+}
+
+harmonised_studies <- harmonised_studies[keep_top]
+
+# Add columns with trait pairing and instrument class
+for(i in 1:length(harmonised_studies)){
+  for(j in 1:length(harmonised_studies[[i]])){
+    harmonised_studies[[i]][j][[1]]$pair <- names(harmonised_studies)[i]
+    harmonised_studies[[i]][j][[1]]$class <- as.character(instrument_class[names(harmonised_studies[[i]][j])])
+  }
+}
+
+```
+
+Add gene annotations for instruments (taken from variant/mask position in exome data for ExWAS studies and nearest gene for common variant GWAS studies)
+
+```{r}
+#| label: gene annotation
+
+# Annotate DeepRVAT and burden masks with relevant gene
+# ExWAS single variants are already annotated
+# Annotate common variants with nearest gene based on VEP annotation:
+
+# List of rsIDs to extract from VEP file (using VEP online interface, returning single consequence per variant --pick)
+# common_instruments <- unlist(lapply(harmonised_studies, function(x){
+#   return(x$opengwas_common$SNP)
+# })) |> unique()
+
+# write.table(common_instruments, file.path(data_dir,"variant_annotation","complextrait_openGWASinstruments.txt"),
+#             row.names = F, col.names = F, quote = F)
+
+vep <- data.table::fread(file.path(data_dir,"variant_annotation","vep_openGWASinstruments.txt")) |>
+  dplyr::filter(grepl("^[0-9]",Location))
+
+## Retain variant annotations for SNPs within 1kb of a protein coding gene only
+vep_coding <- vep |> 
+  filter(BIOTYPE == "protein_coding") |>
+  filter(!(as.numeric(DISTANCE) > 1000) | DISTANCE == "-")
+
+for(i in 1:length(harmonised_studies)){
+  for(j in 1:length(harmonised_studies[[i]])){
+    
+    if(names(harmonised_studies[[i]][j]) == "deeprvat_genescore"){
+      harmonised_studies[[i]][[j]]$gene.exposure = toupper(harmonised_studies[[i]][[j]]$SNP)
+    }
+    
+    else if(names(harmonised_studies[[i]][j]) %in% names(instrument_type[instrument_type == "mask"])){
+      harmonised_studies[[i]][[j]]$gene.exposure = toupper(gsub("_.*","",harmonised_studies[[i]][[j]]$SNP))
+    }
+    
+    else if (names(harmonised_studies[[i]][j]) == "opengwas_common"){
+      gene_symbols <- vep_coding[match(harmonised_studies[[i]][[j]]$SNP, vep_coding$`#Uploaded_variation`),c("SYMBOL","Consequence")] |> as.data.frame()
+      names(gene_symbols) <- c("gene.exposure","vep.consequence")
+      
+      harmonised_studies[[i]][[j]] <- cbind(harmonised_studies[[i]][[j]], gene_symbols)
+    }
+    
+    else{
+      next
+    }
+  }
+}
+
+```
+
+### Check instrument selection
+
+Single variant instruments only:
+
+```{r}
+#| label: check instruments
+#| message: FALSE
+#| fig-width: 8
+#| fig-height: 6
+
+# Check number of instruments, minor allele frequency and average beta values across instrument sets
+instrument_MAFs <- list()
+
+for(i in 1:length(harmonised_studies)){
+  MAFs <- do.call("rbind", lapply(harmonised_studies[[i]], function(x){
+    x |> 
+      mutate(maf = ifelse(eaf.exposure > 0.5, 1-eaf.exposure, eaf.exposure)) |>
+      group_by(exposure,outcome) |>
+      dplyr::summarise(
+        n_instruments = n(),
+        mean_maf = mean(na.exclude(maf)),
+        mean_beta = mean(abs(beta.exposure)))
+  }))
+  MAFs$pairs <- names(harmonised_studies)[i]
+  MAFs$study <- names(harmonised_studies[[i]])
+  MAFs$instrument_type <- instrument_type[MAFs$study]
+  MAFs$instrument_class <- instrument_class[MAFs$study]
+  
+  instrument_MAFs <- c(instrument_MAFs, list(MAFs))
+}
+
+instrument_MAFs <- do.call("rbind", instrument_MAFs) |>
+  mutate(instrument_class = factor(instrument_class, levels = c(
+    "genome:common",
+    "exome:common","exome:lowfreq",
+    "exome:rare","exome:rare (top)",
+    "exome:ultrarare","exome:ultrarare (top)",
+    "mask:synonymous","mask:missense|LC",
+    "mask:pLOF|missense|LC","mask:pLOF",
+    "genescore")))
+
+## Plot average instrument MAF
+
+p_MAF <- ggplot(instrument_MAFs |> filter(instrument_type == "variant"),
+       aes(x = instrument_class, y = mean_maf, size = n_instruments)) +
+  geom_point() + 
+  facet_wrap(.~pairs, nrow = 2) +
+  geom_hline(yintercept = 0.01, lty = 2) +
+  geom_hline(yintercept = 0.05, lty = 2) +
+  geom_hline(yintercept = 0.001, lty = 2) +
+  scale_y_log10(labels = scales::comma, limits = c(0.0001,1)) +
+  theme_bw() +
+  theme(legend.position = "bottom",
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        strip.text = element_text(size = 6.5)) +
+  labs(y = "Mean instrument MAF", x = "Source study", 
+       size = "n (instruments)")
+
+p_MAF
+
+## Plot average instrument beta
+
+p_beta <- ggplot(instrument_MAFs |> filter(instrument_type == "variant"),
+       aes(x = instrument_class, y = mean_beta, size = n_instruments)) +
+  geom_point() + 
+  facet_wrap(.~pairs, nrow = 2) +
+  theme_bw() +
+  theme(legend.position = "bottom",
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        strip.text = element_text(size = 6.5)) +
+  labs(y = "Mean instrument |exposure beta|", x = "Source study", 
+       size = "n (instruments)")
+
+p_beta
+
+```
+
+### Instrument gene coverage
+
+Are the genes being hit by common and rare variant derived instrument sets for complex exposures overlapping?
+
+```{r}
+#| label: plot genes
+#| fig-width: 10
+#| fig-height: 28
+
+# Extract the maximal set of gene annotations for each exposure instrument set
+
+instrument_genes <- do.call("rbind", lapply(harmonised_studies, function(x){
+  do.call("rbind", lapply(x, function(y){
+    y[,c("pair","class","gene.exposure")]
+  }))
+})) |> 
+  mutate(exposure = sub("_.*","",pair),
+         hit = 1,
+         class = factor(class, 
+                        levels = c(
+                          "genome:common",
+                          "exome:common","exome:lowfreq",
+                          "exome:rare","exome:rare (top)",
+                          "exome:ultrarare","exome:ultrarare (top)",
+                          "mask:synonymous","mask:missense|LC",
+                          "mask:pLOF|missense|LC","mask:pLOF",
+                          "genescore"))) |>
+  filter(!(class %in% c("exome:rare (top)", "exome:ultrarare (top)"))) |>
+  select(-pair) |> unique()
+rownames(instrument_genes) <- NULL
+
+# Is gene hit by at least one common, rare (or ultra rare) and mask (or genescore)
+instrument_genes <- instrument_genes |>
+  mutate(set = ifelse(class %in% c("genome:common","exome:common","exome:lowfreq"), "common", 
+                      ifelse(class %in% c("exome:rare","exome:ultrarare"), "rare",
+                             ifelse(grepl("mask|genescore", class), "aggregate", NA))),
+         set_variants = ifelse(class %in% c("genome:common","exome:common","exome:lowfreq"), "common", 
+                      ifelse(class %in% c("exome:rare","exome:ultrarare"), "rare", NA)))
+
+n_sets <- instrument_genes |> group_by(gene.exposure, exposure, set) |> summarise(count = n()) |> 
+  group_by(gene.exposure,exposure) |> summarise(count_sets = n())
+n_sets_variants <- instrument_genes |> na.exclude() |> group_by(gene.exposure, exposure, set_variants) |> summarise(count = n()) |> 
+  group_by(gene.exposure,exposure) |> summarise(count_sets_variants = n())
+
+instrument_genes <- left_join(instrument_genes, n_sets, by = c("gene.exposure","exposure")) |>
+  left_join(n_sets_variants, by = c("gene.exposure","exposure")) |>
+  mutate(colour_sets = ifelse(count_sets == 3,1,
+                              ifelse(count_sets < 3 & count_sets_variants == 2,2,3)))
+instrument_genes$colour_sets[is.na(instrument_genes$count_sets_variants)] <- 3
+
+p_genes <- ggplot(instrument_genes, aes(y = gene.exposure, x = class)) +
+  facet_wrap(exposure ~ ., nrow = 1, scale = "free_y") +
+  geom_tile(aes(fill = as.factor(colour_sets))) +
+  scale_fill_manual(values = c("tomato", "orange","darkblue")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        axis.text.y = element_text(size = 5),
+        legend.position = "none",
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Gene containing (or proximal to) instruments for exposures", y = "", x = "Instrument class")
+        
+p_genes
+
+```
+
+## Mendelian randomisation
+
+### IVW estimates across instrument sets
+
+```{r}
+#| label: forest plots
+#| fig-width: 13
+#| fig-height: 6
+
+res_IVW <- do.call("rbind", res_MR) |> filter(method == "Inverse variance weighted") |>
+  mutate(instrument_type = instrument_type[study],
+         instrument_class = factor(instrument_class[study], 
+                                   levels = c(
+                                     "genome:common",
+                                     "exome:common","exome:lowfreq",
+                                     "exome:rare","exome:rare (top)",
+                                     "exome:ultrarare","exome:ultrarare (top)",
+                                     "mask:synonymous","mask:missense|LC",
+                                     "mask:pLOF|missense|LC","mask:pLOF",
+                                     "genescore")))
+
+ggplot(res_IVW, aes(x = b, y = instrument_class, colour = instrument_type)) +
+  facet_wrap(.~pair, nrow = 2, scale = "free_x") +
+  geom_vline(xintercept = 0, colour = "grey20", lty = 2) +
+  geom_point(aes(pch = pval<0.05, size = nsnp)) +
+  geom_errorbar(aes(xmin = b-1.96*se, xmax = b+1.96*se), width = 0.1) +
+  scale_colour_manual(values = c("tomato","orange","darkblue")) +
+  scale_shape_manual(values = c(1,19)) +
+  theme_bw() +
+  labs(size = "n (instruments)", colour = "Type", x = "IVW", y = "")
+
+```
+
+### IVW estimates across instrument sets (subsetting to shared genes)
+
+Difference in causal effect estimates across instrument sets could be due to differences in the underlying biological processes that are being captured by the included variants. The above analysis was repeated with restriction to instruments hitting a common set of genes/gene regions across strategies:
+
+```{r}
+#| label: forest plots shared genes
+#| fig-width: 14
+#| fig-height: 4
+
+# Keep genes in three or more of the instrument sets: genome:common, exome:common, exome:rare, mask:pLOF|missense|LC
+shared_genes <- instrument_genes |> filter(class %in% c("genome:common","exome:common","exome:rare","mask:pLOF|missense|LC")) |>
+  group_by(gene.exposure, exposure) |> mutate(count = n()) |> filter(count >= 3) |> ungroup()
+
+p_genes_shared <- ggplot(shared_genes, 
+       aes(y = gene.exposure, x = class)) +
+  facet_wrap(exposure ~ ., nrow = 1, scale = "free_y") +
+  geom_tile(fill = "tomato") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        axis.text.y = element_text(size = 5),
+        legend.position = "none",
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Gene containing (or proximal to) instruments for exposures", y = "", x = "Instrument class")
+        
+harmonised_studies_sharedgenes <- harmonised_studies[grepl("HbA1c|LDL|Trig|SBP", names(harmonised_studies))] # Subset exposures
+harmonised_studies_sharedgenes <- lapply(harmonised_studies_sharedgenes, function(x){
+  x[which(names(x) %in% c("opengwas_common", "genebass_common", "genebass_rare","genebass_pLoF|missense|LC"))]}) # Subset instrument sets
+
+# Subset shared genes from instrument sets for each exposure
+harmonised_studies_sharedgenes[c("HbA1c_CHD","HbA1c_T2D")] <- lapply(harmonised_studies_sharedgenes[c("HbA1c_CHD","HbA1c_T2D")], function(x){
+  lapply(x, function(y){y |> filter(gene.exposure %in% (shared_genes |> filter(exposure == "HbA1c") |> pull(gene.exposure)))})
+})
+harmonised_studies_sharedgenes[c("LDL_CHD","LDL_MS","LDL_T2D")] <- lapply(harmonised_studies_sharedgenes[c("LDL_CHD","LDL_MS","LDL_T2D")], function(x){
+  lapply(x, function(y){y |> filter(gene.exposure %in% (shared_genes |> filter(exposure == "LDL") |> pull(gene.exposure)))})
+})
+harmonised_studies_sharedgenes[c("Trig_CHD","Trig_T2D" )] <- lapply(harmonised_studies_sharedgenes[c("Trig_CHD","Trig_T2D" )], function(x){
+  lapply(x, function(y){y |> filter(gene.exposure %in% (shared_genes |> filter(exposure == "Trig") |> pull(gene.exposure)))})
+})
+harmonised_studies_sharedgenes["SBP_Stroke"] <- lapply(harmonised_studies_sharedgenes["SBP_Stroke"], function(x){
+  lapply(x, function(y){y |> filter(gene.exposure %in% (shared_genes |> filter(exposure == "SBP") |> pull(gene.exposure)))})
+})
+
+# Run MR on restricted instrument set
+results_MR_sharedgenes <- list()
+results_MR_sharedgenes_SNP <- list()
+
+for(i in 1:length(harmonised_studies_sharedgenes)){
+  
+  res_list <- list()
+  res_list_SNP <- list()
+  
+  for(j in 1:length(harmonised_studies_sharedgenes[[i]])){
+
+    dat <- harmonised_studies_sharedgenes[[i]][j]
+    message("Performing MR for ", names(harmonised_studies_sharedgenes)[i],": ", names(harmonised_studies_sharedgenes[[i]])[j])
+
+    res <- TwoSampleMR::mr(dat[[1]])
+    res$pair <- names(harmonised_studies_sharedgenes)[i]
+    res$study <- names(harmonised_studies_sharedgenes[[i]])[j]
+    
+    res_SNP <- TwoSampleMR::mr_singlesnp(dat[[1]]) |>
+      left_join(dat[[1]][,c("SNP","pair","class","gene.exposure")])
+
+    res_list <- c(res_list, list(res))
+    res_list_SNP <- c(res_list_SNP, list(res_SNP))
+  }
+  res_join <- do.call("rbind", res_list)
+  results_MR_sharedgenes <- c(results_MR_sharedgenes, list(res_join))
+  
+  res_join_SNP <- do.call("rbind", res_list_SNP)
+  results_MR_sharedgenes_SNP <- c(results_MR_sharedgenes_SNP, list(res_join_SNP))
+}
+
+names(results_MR_sharedgenes) <- names(harmonised_studies_sharedgenes)
+names(results_MR_sharedgenes_SNP) <- names(harmonised_studies_sharedgenes)
+
+# Forest plot
+
+res_sharedgenes_IVW <- do.call("rbind", results_MR_sharedgenes) |> filter(method == "Inverse variance weighted") |>
+  mutate(instrument_type = instrument_type[study],
+         instrument_class = factor(instrument_class[study], 
+                                   levels = c(
+                                     "genome:common",
+                                     "exome:common","exome:lowfreq",
+                                     "exome:rare","exome:rare (top)",
+                                     "exome:ultrarare","exome:ultrarare (top)",
+                                     "mask:synonymous","mask:missense|LC",
+                                     "mask:pLOF|missense|LC","mask:pLOF",
+                                     "genescore")))
+
+p_ivw_shared <- ggplot(res_sharedgenes_IVW, aes(x = b, y = instrument_class, colour = instrument_type)) +
+  facet_wrap(.~pair, nrow = 2, scale = "free_x") +
+  geom_vline(xintercept = 0, colour = "grey20", lty = 2) +
+  geom_point(aes(pch = pval<0.05, size = nsnp)) +
+  geom_errorbar(aes(xmin = b-1.96*se, xmax = b+1.96*se), width = 0.1) +
+  scale_colour_manual(values = c("orange","darkblue")) +
+  scale_shape_manual(values = c(1,19)) +
+  theme_bw() +
+  labs(size = "n (instruments)", colour = "Type", x = "IVW", y = "")
+
+gridExtra::grid.arrange(p_genes_shared, p_ivw_shared, nrow = 1, widths = c(0.4,0.6))
+
+```
+
+### Comparison of Wald Ratio (subsetting to shared genes)
+
+There are a limited number of common and rare variants for the tested complex exposures that are annotated to the same genes (this will be a more useful analysis to do for molecular traits). For genes which are shared, there are several cases where rare variants within a given gene are having disperate outcome effects. For example, rare variants in the *APOB* gene which are positively associated with LDL levels are showing either positive or negative effects on risk of T2D. This could potentially be due to the pleiotropic action of the APOB protein in distinct biological pathways, the relevant functional attributes of which may be differentially impacted by distruptive rare variants across the coding region...
+
+```{r}
+#| label: shared genes wald ratios
+#| fig-width: 14
+#| fig-height: 8
+
+#lapply(results_MR_sharedgenes_SNP, function(x){range(x$b)})
+
+plot_wald <- function(snp_results, set_1, set_2){
+
+  dat <- snp_results[,c("b","se","p","pair","class","gene.exposure")] |> na.exclude()
+  axis_lim <- max(abs(range(dat$b))) + 1.5
+  
+  dat <- left_join(dat |> filter(class %in% set_1), dat |> filter(class %in% set_2), by = c("pair", "gene.exposure"), suffix = c(".1",".2")) |> na.exclude()
+  dat$gene.exposure <- droplevels(as.factor(dat$gene.exposure))
+  
+
+  ggplot(dat, aes(x = b.1, y = b.2, colour = gene.exposure)) +
+    geom_abline(slope = 1, intercept = 0, colour = "grey40") +
+    geom_errorbar(aes(xmin = b.1-1.96*se.1, xmax = b.1+1.96*se.1), width = 0.1) +
+    geom_errorbar(aes(ymin = b.2-1.96*se.2, ymax = b.2+1.96*se.2), width = 0.1) +
+    geom_point(size = 2) +
+    scale_colour_manual(name = "", values = RColorBrewer::brewer.pal(name = "Paired", n = length(unique(dat$gene.exposure)))) +
+    scale_x_continuous(limits = c(-axis_lim, axis_lim)) +
+    scale_y_continuous(limits = c(-axis_lim, axis_lim)) +
+    theme_bw() +
+    theme(legend.position = "bottom",
+          legend.text = element_text(size = 8),
+          plot.title = element_text(hjust = 0.5)) +
+    guides(colour = guide_legend(override.aes = list(size = 2))) +
+    labs(x = paste0("Wald ratio (class: ", set_1, ")"),
+         y = paste0("Wald ratio (class: ", set_2, ")"),
+         title = unique(dat$pair))
+}
+
+cowplot::plot_grid(plotlist = lapply(results_MR_sharedgenes_SNP, plot_wald, set_1 = "genome:common", set_2 = "exome:rare"), nrow = 2, align = "h")
+
+```
+
+### Heterogeneity analysis
+
+### MR Egger intercept (horizontal pleiotropy)
+
+```{r}
+#| label: pleiotropy test
+#| fig-width: 10
+#| fig-height: 6
+
+# Perform MR on each exposure-outcome pair, across each of 12 instrument sets
+res_egger <- list()
+
+for(i in 1:length(harmonised_studies)){
+  res_list <- list()
+  
+  for(j in 1:length(harmonised_studies[[i]])){
+    dat <- harmonised_studies[[i]][j]
+    
+    if(nrow(dat[[1]]) == 1){
+      res <- data.frame(
+        id.exposure = NA,
+        id.outcome = NA,
+        outcome = NA,
+        exposure = NA,
+        egger_intercept = NA,
+        se = NA,
+        pval = NA
+      )
+    } else {
+      res <- TwoSampleMR::mr_pleiotropy_test(dat[[1]])
+    }
+    
+    res$pair <- names(harmonised_studies)[i]
+    res$study <- names(harmonised_studies[[i]])[j]
+    
+    res_list <- c(res_list, list(res))
+  }
+  res_join <- do.call("rbind", res_list)
+  res_egger <- c(res_egger, list(res_join))
+}
+
+res_egger <- do.call("rbind", res_egger) |>
+  mutate(instrument_type = instrument_type[study],
+         instrument_class = factor(instrument_class[study], 
+                                   levels = c(
+                                     "genome:common",
+                                     "exome:common","exome:lowfreq",
+                                     "exome:rare","exome:rare (top)",
+                                     "exome:ultrarare","exome:ultrarare (top)",
+                                     "mask:synonymous","mask:missense|LC",
+                                     "mask:pLOF|missense|LC","mask:pLOF",
+                                     "genescore")))
+
+ggplot(res_egger, aes(x = egger_intercept, y = instrument_class, colour = instrument_type)) +
+  facet_wrap(.~pair, nrow = 2, scale = "free_x") +
+  geom_vline(xintercept = 0, colour = "grey20", lty = 2) +
+  geom_point(aes(pch = pval<0.05), size = 3) +
+  geom_errorbar(aes(xmin = egger_intercept-1.96*se, xmax = egger_intercept+1.96*se), width = 0.1) +
+  scale_colour_manual(values = c("tomato","orange","darkblue")) +
+  scale_shape_manual(values = c(1,19)) +
+  theme_bw() +
+  labs(x = "Egger intercept", colour = "Type", x = "IVW", y = "")
+
+
+```
