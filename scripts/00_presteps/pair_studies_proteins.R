@@ -16,16 +16,22 @@ prot_aggregate <- list.files(file.path(prot_dir, "exome-aggregate"), pattern = "
 
 # Outcome studies (exposures from previous complex trait analysis)
 out_studies <- read.csv(here("exposure_studies.csv"))
+# Outcome studies with pQTLs and proxy SNPs only
+out_studies_pQTLs <- data.frame(file = list.files(file.path(data_dir, "sumstats", "opengwas"), pattern = "*_wproxies.vcf.bgz$")) |>
+  dplyr::mutate(exposure_study = sub("_pQTLs.*","",file)) |>
+  dplyr::mutate(exposure_study = ifelse(grepl("^GCST",exposure_study), paste0("ebi-a-",exposure_study),
+    ifelse(grepl("UKB", exposure_study), tolower(exposure_study), exposure_study))) |>
+  dplyr::left_join(out_studies |> dplyr::filter(source == "opengwas"))
 
 paired_studies_common <- expand.grid(
   exposure_study = prot_common,
-  outcome_study = out_studies[out_studies$source == "opengwas", "exposure_study"]) |>
+  outcome_study = out_studies_pQTLs$file) |>
   dplyr::mutate(
     exposure_name = sub("sun_pQTL_(.*)_.*", "\\1", exposure_study),
-    outcome_name = out_studies[match(outcome_study, out_studies$exposure_study), "exposure_name"],
+    outcome_name = out_studies_pQTLs[match(outcome_study, out_studies_pQTLs$file), "exposure_name"],
     exposure_source = "sun_gwas",
     outcome_source = "opengwas",
-    class = "variant") # 39,546
+    class = "variant") # 29,546
 
 paired_studies_exome <- expand.grid(
   exposure_study = prot_exome,

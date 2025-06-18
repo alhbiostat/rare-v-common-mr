@@ -1,0 +1,7 @@
+exposure_study,outcome_study,exposure_name,outcome_name,exposure_source,outcome_source,class
+sun_pQTL_A1BG_OID30771.tsv,ieu-b-110_pQTLs_wproxies.vcf.bgz,A1BG,LDL,sun_gwas,opengwas,variant
+dhindsa_pQTL_A1BG_OID30771.tsv,genebass_ukbwes_p30780_LDL_direct.tsv,A1BG,LDL,dhindsa_exwas,genebass,variant
+dhindsa_pQTL_aggregatetest_A1BG_OID30771.tsv,genebass_ukbwes_p30780_LDL_direct_genetest.tsv,A1BG,LDL,dhindsa_exwas,genebass,mask
+sun_pQTL_ACE_OID30696.tsv,UKB-b-20175_pQTLs_wproxies.vcf.bgz,ACE,SBP,sun_gwas,opengwas,variant
+dhindsa_pQTL_ACE_OID30696.tsv,genebass_ukbwes_p4080_Systolic_blood_pressure_automated_reading.tsv,ACE,SBP,dhindsa_exwas,genebass,variant
+dhindsa_pQTL_aggregatetest_ACE_OID30696.tsv,genebass_ukbwes_p4080_Systolic_blood_pressure_automated_reading_genetest.tsv,ACE,SBP,dhindsa_exwas,genebass,mask
