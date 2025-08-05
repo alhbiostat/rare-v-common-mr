@@ -1,10 +1,14 @@
 # Date: 05-06-2025
 # Author: A.L.Hanson
-# Purpose: Harmonise OpenGWAS outcome summary statistics with Sun et al. protein exposure pQTLs
-# Exposure variants are finemapped and do not require clumping
+# Purpose:
+## Extract finemapped exposure variants (pQTLs) - no clumping required
+## Harmonise OpenGWAS outcome summary statistics with Sun et al. protein exposure pQTLs
 
 args <- commandArgs(trailingOnly = TRUE)
-#args <- c("sun_pQTL_AAMDC_OID30236.tsv","ebi-a-GCST90000615_pQTLs_wproxies.vcf.bgz","AAMDC","VitD","sun_gwas","opengwas","variant")
+# Test args:
+#args <- c("sun_pQTL_ABO_OID30675.tsv","GCST90013977_pQTLs_wproxies.vcf.bgz","ABO","RBCcount","sun_gwas","opengwas","variant")
+#args <- c("sun_pQTL_APOE_OID30727.tsv","ieu-b-110_pQTLs_wproxies.vcf.bgz","APOE","LDL","sun_gwas","opengwas","variant")
+#args <- c("sun_pQTL_AHSP_OID21078.tsv","GCST90014006_pQTLs_wproxies.vcf.bgz","AHSP","HbA1c","sun_gwas","opengwas","variant")
 
 exposure_study <- args[1]
 outcome_study <- args[2]
@@ -32,7 +36,10 @@ message("Exposure: ", exposure_name, " (", exposure_study, ")\n",
 main <- function(exposure_study, outcome_study){
   # Exposure pQTLs
   exposure_dat <- data.table::fread(file.path(data_dir, "sumstats/proteomics/common", exposure_study), data.table = FALSE)
-  message("n instruments: ", nrow(exposure_dat))
+  message("n snps: ", nrow(exposure_dat), " n independent hits: ", sum(exposure_dat$finemapped_hit))
+
+  # Extract finemapped variants
+  exposure_dat <- exposure_dat |> dplyr::filter(finemapped_hit == TRUE)
 
   if(nrow(exposure_dat) == 0){
     message("No instruments for protein")
@@ -52,8 +59,9 @@ main <- function(exposure_study, outcome_study){
       other_allele_col = "OA",
       pval_col = "P")
 
-    # Add cis-trans information  
+    # Add cis-trans information and chr:bp_A1_A2 ID
     exposure_formatted$cis_trans = exposure_dat[match(exposure_formatted$SNP, exposure_dat$VEP_RSID),]$cis_trans
+    exposure_formatted$variant = exposure_dat[match(exposure_formatted$SNP, exposure_dat$VEP_RSID),]$RSID
 
     # Extract instruments from outcome
     message("Formatting outcome data...")
@@ -76,7 +84,7 @@ main <- function(exposure_study, outcome_study){
     # Harmonise SNP data
     dat_harmonised <- harmonise_data(exposure_dat = exposure_formatted, outcome_dat = outcome_formatted) 
     
-    message("Final instrument count:", nrow(dat_harmonised))
+    message("Final instrument count: ", nrow(dat_harmonised))
   }
 
   # Write out harmonised studies

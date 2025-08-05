@@ -29,7 +29,6 @@ ld_file <- file.path(ld_dir, "full_rsid")
 annots <- data.table::fread(file.path(data_dir,"/variant_annotations/vep_variantannotations_hg38_altered.txt"))
 
 # Read in list of proteomics pQTLs
-## THIS MAY NEED TO BE REPEATED WHEN FINEMAPPING IS FIXED (AS WILL SUN GWAS VARIANT EXTRACTION)
 pQTLs <- data.table::fread(file.path(data_dir,"sumstats/proteomics/common/all_pQTLs.tsv"), fill = T, header = F)
 colnames(pQTLs) <- c("SNP","RSID")
 

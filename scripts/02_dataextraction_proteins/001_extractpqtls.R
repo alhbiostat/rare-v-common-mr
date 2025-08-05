@@ -2,7 +2,7 @@
 # Author: A.L.Hanson
 # Purpose: Extract common and rare variant instruments for UKB O-link protein exposures from GPMAP processed studies 
 # Output: 
-# Common (finemapped) variant summary statistics (top variant per finemapped region, p-value thesholded, for each protein)
+# Common variant summary statistics (p-value thesholded, for each protein)
 # Rare variant summary statistics (p-value thesholded, for each protein)
 
 library(EnsDb.Hsapiens.v86)
@@ -12,6 +12,7 @@ dotenv::load_dot_env(file = "config.env")
 data_dir <- Sys.getenv("data_dir")
 rawdata_dir <- Sys.getenv("rawdata_dir")
 gpmap_data_dir <- Sys.getenv("gpmap_data_dir")
+gpmap_res_dir <- Sys.getenv("gpmap_res_dir")
 prot_dir <- file.path(data_dir,"sumstats","proteomics")
 
 # Load list of UKB O-link single variant studies (and correct gene name)
@@ -40,12 +41,17 @@ gene_ranges <- gene_ranges |> dplyr::mutate(
 gene_ranges$cis.start <- gene_ranges$Gene.start - 1000000
 gene_ranges$cis.end <- gene_ranges$Gene.start + 1000000
 
-# For each single variant study, read in finemapped (common) or extracted (rare) variants, filter on p-value threhold and combine across loci
+# Load list of fine-mapped study result files (from GPMAP)
+finemapped_studies <- data.table::fread(file.path(gpmap_res_dir, "latest", "study_extractions.tsv.gz"))
+
+# For each single variant study, read in standardised common or rare variants (split by ld block), filter on p-value threhold and combine across loci
+# Annotate independent top hits from finemapping
 
 message("Single variant studies:")
 
 for(i in 1:nrow(studies)){
   study <- studies[i,]
+  study_name <- study$study_name
   sample_size <- study$sample_size
   protein_target <- study$gene
   probe <- study$probe
@@ -53,7 +59,7 @@ for(i in 1:nrow(studies)){
 
   cis_region <- gene_ranges |> dplyr::filter(Olink.ID == oid)
 
-  message("Processing study: ", study$study_name, " for protein: ", protein_target, " (", oid, ")")
+  message("Processing study: ", study_name, " for protein: ", protein_target, " (", oid, ")")
 
   if(study$variant_type == "common"){
 
@@ -63,46 +69,43 @@ for(i in 1:nrow(studies)){
       next
     }
 
-    # Finemapped regions for study
+    # Standardised regions for study
     study_dir <- study$extracted_location
-    finemapped_dir <- paste0(study_dir, "finemapped")
-    finemapped_files <- list.files(finemapped_dir, full.names = TRUE)
+    standardised_dir <- paste0(study_dir, "standardised")
+    standardised_files <- list.files(standardised_dir, full.names = TRUE, pattern = "EUR_.*_[0-9]*\\.tsv\\.gz")
     
-    if(length(finemapped_files) == 0){
-      message("No finemapped files found for study: ", study$study_name)
+    if(length(standardised_files) == 0){
+      message("No standardised regions found for study: ", study$study_name)
       next
     }
     
-    finemapped_regions <- sub(".*\\/(EUR_.*)\\.tsv.gz", "\\1", finemapped_files)
+    standardised_regions <- sub(".*\\/(EUR_.*)\\.tsv.gz", "\\1", standardised_files)
 
-    # Read in finemapped variants across ld-blocks
-    finemapped <- lapply(finemapped_files, function(x) {
+    # Read in variants across ld-blocks
+    standardised <- lapply(standardised_files, function(x) {
       dt <- data.table::fread(x, colClasses = c("RSID" = "character"))
-
-      if(!("IMPUTED" %in% colnames(dt))){
-        dt$IMPUTED <- NA
-      }
-
-      dt |> dplyr::filter(IMPUTED == FALSE) |>
-        dplyr::slice_max(n=1, abs(Z), with_ties = FALSE) # Keep top variant per region based on abs Z-score
+      dt |> dplyr::filter(P <= 5e-8 & EAF > 0.01 & 1-EAF > 0.01)
     })
 
-    finemapped <- finemapped |> 
+    standardised <- standardised |> 
       dplyr::bind_rows() |>
       dplyr::mutate(
-        region = finemapped_regions[lapply(finemapped, nrow) == 1],
+        region = rep(standardised_regions, times = sapply(standardised, nrow)),
         protein_target = protein_target,
         probe = probe,
         olink_id = oid,
         sample_size = sample_size,
         variant_type = "common",
         cis_trans = ifelse(CHR == cis_region$Gene.CHROM & BP >= cis_region$cis.start & BP <= cis_region$cis.end, "cis", "trans")) |>
-      dplyr::filter(P <= 5e-8 & EAF > 0.01 & 1-EAF > 0.01) |>
       dplyr::arrange(CHR, BP)
 
+    # Annotate finemapped variants
+    finemapped <- finemapped_studies |> dplyr::filter(study == study_name) |> dplyr::pull(snp)
+    standardised$finemapped_hit <- ifelse(standardised$SNP %in% finemapped, TRUE, FALSE)
+
     # Save finemapped variants to file
-    message("Num GWAS variants: ", nrow(finemapped))
-    data.table::fwrite(finemapped, output_file, sep = "\t", quote = FALSE)
+    message("Num GWAS variants: ", nrow(standardised), " Num independent hits: ", sum(standardised$finemapped_hit))
+    data.table::fwrite(standardised, output_file, sep = "\t", quote = FALSE)
   }
 
   if(study$variant_type == "rare_exome"){
@@ -145,6 +148,12 @@ for(i in 1:nrow(studies_aggregate)){
 
   message("Processing study: ", study$study_name, " for protein: ", protein_target, " (", oid, ")")
 
+  output_file <- file.path(prot_dir, "exome-aggregate", paste0("dhindsa_pQTL_aggregatetest_",protein_target, "_", oid, ".tsv"))
+  if(file.exists(output_file)){
+    message("Output file already exists: ", output_file)
+    next
+  }
+
   # Summary statistics
   stats <- study$study_location
 
@@ -161,6 +170,5 @@ for(i in 1:nrow(studies_aggregate)){
 
     # Save exome variants to file
     message("Num ExWAS aggregates: ", nrow(aggregates))
-    output_file <- file.path(prot_dir, "exome-aggregate", paste0("dhindsa_pQTL_aggregatetest_",protein_target, "_", oid, ".tsv"))
     data.table::fwrite(aggregates, output_file, sep = "\t", quote = FALSE)
 }

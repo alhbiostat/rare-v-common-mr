@@ -1,6 +1,6 @@
 # Date: 05-06-2025
 # Author: A.L.Hanson
-# Purpose: Add rsIDs for finemapped pQTLs from Sun et al. (as taken from GPMAP finemapped studies)
+# Purpose: Add rsIDs for extracted pQTLs from Sun et al. (as taken from GPMAP standardised studies)
 
 # Load environment variables
 dotenv::load_dot_env(file = "config.env")
@@ -18,10 +18,22 @@ system(paste("mkdir -p", file.path(prot_dir, "common/archive")))
 add_rsids <- function(file){
 
   dat <- data.table::fread(file)
+
+  if("VEP_RSID" %in% colnames(dat)){
+    message("File already annotated... skipping")
+    return(NULL)
+  }
   
+  if(nrow(dat) == 0){
+    message("No hits in file... skipping")
+    return(NULL)
+  }
+
   # Move original file to archive
   file_bn <- basename(file)
   file.rename(file, file.path(prot_dir, "common/archive", file_bn))
+
+  message("Adding rsIDs:", file_bn)
 
   vep_ids <- vep |> dplyr::filter(Uploaded_variation %in% dat$SNP) |>
     dplyr::select(Uploaded_variation, Existing_variation) |>

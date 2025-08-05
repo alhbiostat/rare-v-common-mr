@@ -1,10 +1,9 @@
 #!/bin/bash
-#To run: source scripts/02_dataextraction_proteins/runformatting_proteins.sh
+#To run eg: source runformatting_proteins.sh allstudypairings_proteins.csv
 
 source "config.env"
 
-#studies=${project_dir}/allstudypairings_proteins.csv
-studies=${project_dir}/allstudypairings_proteins_sunout.csv
+studies=$1
 scripts_dir=${project_dir}/scripts/02_dataextraction_proteins
 out_dir=${data_dir}/harmonised/proteomics
 log_dir=${out_dir}/logs
