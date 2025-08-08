@@ -3,8 +3,10 @@
 # Purpose: Harmonise ExWAS pQTLs and gene-based aggregate tests with complex trait outcome studies
 
 args <- commandArgs(trailingOnly = TRUE)
+# Test args
 #args <- c("dhindsa_pQTL_MAPK9_OID20557.tsv","genebass_ukbwes_p4080_Systolic_blood_pressure_automated_reading.tsv","MAPK9","SBP","dhindsa_exwas","genebass","variant")
 #args <- c("dhindsa_pQTL_aggregatetest_WFIKKN2_OID20785.tsv","genebass_ukbwes_p4080_Systolic_blood_pressure_automated_reading_genetest.tsv","WFIKKN2","SBP","dhindsa_exwas","genebass","mask")
+#args <- c("dhindsa_pQTL_ZP3_OID30265.tsv","genebass_ukbwes_p30870_Triglycerides.tsv","ZP3","Trig","dhindsa_exwas","genebass","variant")
 
 exposure_study <- args[1]
 outcome_study <- args[2]
@@ -67,11 +69,12 @@ main <- function(exposure_study, outcome_study, class) {
     names(exposure_split) <- c("exposure_common", "exposure_rare", "exposure_ultrarare")
 
     # Perform LD clumping for common and variants
-    # For rare variats lacking ld information, keep all
+    # For rare variats lacking ld information, keep all, and top hit per gene (filt) post harmonisation
     exposure_finalset <- list()
   
     message("LD clumping for common variants...")
     exposure_finalset[[1]] <- perform_clumping(exposure_df = exposure_split$exposure_common)
+    
     exposure_finalset[[2]] <- exposure_split$exposure_rare
     exposure_finalset[[3]] <- exposure_split$exposure_ultrarare
 
@@ -103,6 +106,12 @@ main <- function(exposure_study, outcome_study, class) {
           TwoSampleMR::harmonise_data(exposure_dat = x, outcome_dat = outcome_formatted)
         }})
     names(dat_harmonised) <- c("common", "rare", "ultrarare")
+
+    message("Keep top variant per gene for rare and ultra-rare variants...")
+    dat_harmonised[[4]] <- keeptop_rare(harmonised_df = dat_harmonised$rare)
+    dat_harmonised[[5]] <- keeptop_rare(harmonised_df = dat_harmonised$ultrarare)
+
+    names(dat_harmonised) <- c("common", "rare", "ultrarare", "rare_filt", "ultrarare_filt")
 
     message("Final instrument count:")
     print(unlist(lapply(dat_harmonised, nrow)))
@@ -391,6 +400,20 @@ perform_clumping <- function(exposure_df){
   positions_keep <- sub("_.*","",clumped_df$rsid)
   
   return(subset(exposure_df, sub("_.*","",exposure_df$SNP) %in% positions_keep))
+}
+
+keeptop_rare <- function(harmonised_df){
+
+  if(nrow(harmonised_df) == 0){
+    harmonised_filt <- data.frame()
+  }else{
+    harmonised_filt <- harmonised_df |> 
+    # Nb. only genebass outcomes have gene annotated
+      arrange(gene.outcome, pval.exposure) |> 
+      filter(duplicated(gene.outcome) == FALSE) |> 
+      arrange(chr.exposure, as.numeric(pos.exposure))
+  }
+  return(harmonised_filt)
 }
 
 main(exposure_study = exposure_study, outcome_study = outcome_study, class = class)

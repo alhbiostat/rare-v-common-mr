@@ -13,8 +13,8 @@ chunk_dir=${data_dir}/tmp_study_chunks
 
 mkdir -p $chunk_dir
 
-grep "sun_gwas" $studies > ${chunk_dir}/allstudypairings_proteins_common.csv
-studies_common=${chunk_dir}/allstudypairings_proteins_common.csv
+grep "sun_gwas" $studies > ${chunk_dir}/allstudypairings_proteins_set.csv
+studies_common=${chunk_dir}/allstudypairings_proteins_set.csv
 
 # --- Split file ---
 
