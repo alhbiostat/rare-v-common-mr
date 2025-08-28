@@ -14,7 +14,7 @@
 #3. MR with rare and ultrarare pruned variants (top hit per gene)
 
 # Exome masks (split cis, trans, combined):
-# MR with aggregate IVs:
+#1. MR with aggregate IVs: pLOF, missense, pLOF/missense, synonymous
 
 library(dotenv)
 library(here)
@@ -24,6 +24,7 @@ library(ggplot2)
 dotenv::load_dot_env(file = here("config.env"))
 data_dir <- file.path(Sys.getenv("data_dir"),"harmonised","proteomics")
 res_dir <- Sys.getenv("results_dir")
+ld_dir <- Sys.getenv("ld_dir")
 
 args = commandArgs(trailingOnly=TRUE)
 
@@ -35,16 +36,19 @@ if (length(args)!=1) {
 }
 
 harmonised_file <- args[1]
-load(file.path(data_dir, harmonised_file)) # harmonised_studies
-
 # Load harmonised study data
+load(file.path(data_dir, harmonised_file)) # harmonised_studies
+message("Number of exposure:outcome pairs: ", length(harmonised_studies))
+
+outcome <- sub("harmonised_studies_(.*)\\.rda","\\1",harmonised_file)
+results_file <- paste0("results_molecular_MR_", outcome, ".rda")
 
 # Perform MR on each exposure-outcome pair, across each of 10 instrument sets (split by cis, trans and combined IVs)
 
 # Check if MR results already exist
-if(file.exists(file.path(res_dir, "results_complextrait_MR.rda"))){
-  ## FIX
-  load(file.path(res_dir, "results_complextrait_MR.rda"))
+if(file.exists(file.path(res_dir, results_file))){
+
+  load(file.path(res_dir, results_file))
   results_MR_old <- results_MR
 
   # If new study pairs exist that are not in results:
@@ -65,11 +69,9 @@ if(file.exists(file.path(res_dir, "results_complextrait_MR.rda"))){
 
 # Analyse each (new) study pair
 for(i in 1:length(harmonised_studies)){
-  
   res_list <- list()
   
   for(j in 1:length(harmonised_studies[[i]])){
-
     dat <- harmonised_studies[[i]][j]
     
     message("Performing MR for ", names(harmonised_studies)[i],": ", names(harmonised_studies[[i]])[j])
@@ -77,28 +79,79 @@ for(i in 1:length(harmonised_studies)){
     skip_pair <- (nrow(dat[[1]]) == 1 & is.na(dat[[1]]$mr_keep[1])) | (nrow(dat[[1]]) == 1 & dat[[1]]$mr_keep[1] == FALSE)
 
     if(!is.na(dat[[1]]$SNP[1]) & skip_pair == FALSE){
+      # Split cis and trans instruments
+      dat1 <- dat[[1]]
+      if(all(c("cis","trans") %in% unique(dat1$cis_trans))){
+        dat_split <- split(dat1, dat1$cis_trans)
+        dat_split$combined <- dat1
+      }else{
+        dat_split <- split(dat1, dat1$cis_trans)
+      }
+      
       # Perform LD aware MR for common GWAS finemapped IV sets
-      if(names(dat) == "sun_gwas_variant"){
-
-        ## need to pull out clumped as well as finemapped IVs
-        ### CODE HERE 
-
-      } else {
-        # Split cis, trans and combined instruments
-        dat <- dat[[1]]
-        dat_split <- split(dat, dat$cis_trans)
-        dat_split$combined <- dat
-
+      if(names(dat) == "sun_gwas_variant_common_finemapped"){
+        # Perform MR with correlated instruments using MendelianRandomisation::mr_ivw()
         res_split <- lapply(dat_split, function(x){
-          res <- TwoSampleMR::mr(x)
-          res$pair <- names(harmonised_studies)[i]
-          res$study <- names(harmonised_studies[[i]])[j]
-          IV_set <- unique(x$cis_trans)
-          res$IV_set <- paste(IV_set[order(IV_set)],collapse = "_")
+          snplist <- x$SNP
+          cis_trans <- unique(x$cis_trans)
+          
+          # Generate LD matrix for SNPs (alleles should be correctly oriented as using alphatised GPMAP data)
+          ld_mat <- ieugwasr::ld_matrix(
+            snplist,
+            plink_bin = genetics.binaRies::get_plink_binary(),
+            bfile = file.path(ld_dir, "full_rsid"),
+            with_alleles = FALSE
+          )
+
+          if(length(snplist) == 1){
+            rownames(ld_mat) <- paste("snp",1:nrow(ld_mat),sep = "_")
+            colnames(ld_mat) <- rownames(ld_mat)
+          }else{
+          # Reorder to match harmonised object
+          ld_mat <- ld_mat[snplist, snplist]
+          rownames(ld_mat) <- paste("snp",1:nrow(ld_mat),sep = "_")
+          colnames(ld_mat) <- rownames(ld_mat)
+          }
+
+          # Convert to MendelianRandomization package input with correlations
+          dat2 <- MendelianRandomization::mr_input(
+            bx = x$beta.exposure,
+            bxse = x$se.exposure,
+            by = x$beta.outcome,
+            byse = x$se.outcome,
+            corr=ld_mat)
+
+          res <- MendelianRandomization::mr_ivw(object = dat2, correl = TRUE)
+          # Reformat results to match TwoSampleMR::mr()
+          res <- data.frame(
+            id.exposure = unique(x$id.exposure),
+            id.outcome = unique(x$id.outcome),
+            outcome = unique(x$outcome),
+            exposure = unique(x$exposure),
+            method = ifelse(length(snplist) == 1,"Wald ratio", "Inverse variance weighted"),
+            nsnp = res@SNPs,
+            b = res@Estimate,
+            se = res@StdError,
+            pval = res@Pvalue,
+            pair = names(harmonised_studies)[i],
+            cis_trans = paste(cis_trans[order(cis_trans)],collapse = "_"),
+            IV_set = names(dat))
+          
           return(res)
         })
-        res <- unique(do.call("rbind", res_split))
+      } else {
+        # For all other instrument sets use standard TwoSampleMR::mr()
+        res_split <- lapply(dat_split, function(x){
+          cis_trans <- unique(x$cis_trans)
+          res <- TwoSampleMR::mr(x)
+          res$pair <- names(harmonised_studies)[i]
+          cis_tans <- unique(x$cis_trans)
+          res$cis_trans <- paste(cis_trans[order(cis_trans)],collapse = "_")
+          res$IV_set <- names(dat)
+          return(res)
+        })
       }
+      res <- unique(do.call("rbind", res_split))
     } else {
       res <- data.frame(
         id.exposure = NA,
@@ -110,14 +163,15 @@ for(i in 1:length(harmonised_studies)){
         b = NA,
         se = NA,
         pval = NA,
-        pair = NA,
-        study = NA
+        pair = names(harmonised_studies)[i],
+        cis_trans = NA,
+        IV_set = names(dat)
       )
     }
-    
     res_list <- c(res_list, list(res))
   }
   res_join <- do.call("rbind", res_list)
+  rownames(res_join) <- NULL
   results_MR <- c(results_MR, list(res_join))
 }
 
@@ -131,8 +185,8 @@ if(exists("results_MR_old")){
   results_MR <- results_MR[order_studies]
   
   ## Write out results_MR object
-  save(results_MR, file = file.path(res_dir, "results_complextrait_MR.rda"))
+  save(results_MR, file = file.path(res_dir, results_file))
 }else{
   ## Write out harmonised_study object
-  save(results_MR, file = file.path(res_dir, "results_complextrait_MR.rda"))
+  save(results_MR, file = file.path(res_dir, results_file))
 }
