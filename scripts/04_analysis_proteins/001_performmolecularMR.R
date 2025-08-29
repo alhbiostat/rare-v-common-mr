@@ -87,11 +87,20 @@ for(i in 1:length(harmonised_studies)){
       }else{
         dat_split <- split(dat1, dat1$cis_trans)
       }
-      
+  
       # Perform LD aware MR for common GWAS finemapped IV sets
       if(names(dat) == "sun_gwas_variant_common_finemapped"){
         # Perform MR with correlated instruments using MendelianRandomisation::mr_ivw()
         res_split <- lapply(dat_split, function(x){
+          
+          skip_split <- (nrow(x) == 1 & is.na(x$mr_keep[1])) | (nrow(x) == 1 & x$mr_keep[1] == FALSE)
+          if(skip_split == TRUE){
+            res <- data.frame(
+              id.exposure = NA, id.outcome = NA, outcome = NA, exposure = NA, method = NA, nsnp = NA,
+              b = NA, se = NA, pval = NA, pair = names(harmonised_studies)[i], cis_trans = NA, IV_set = names(dat))
+            return(res)
+          }
+
           snplist <- x$SNP
           cis_trans <- unique(x$cis_trans)
           
@@ -104,13 +113,19 @@ for(i in 1:length(harmonised_studies)){
           )
 
           if(length(snplist) == 1){
+            # Remove any SNPs not in ld matrix
+            snplist <- snplist[snplist %in% colnames(ld_mat)]
+            x <- x |> dplyr::filter(SNP %in% snplist)
             rownames(ld_mat) <- paste("snp",1:nrow(ld_mat),sep = "_")
             colnames(ld_mat) <- rownames(ld_mat)
           }else{
-          # Reorder to match harmonised object
-          ld_mat <- ld_mat[snplist, snplist]
-          rownames(ld_mat) <- paste("snp",1:nrow(ld_mat),sep = "_")
-          colnames(ld_mat) <- rownames(ld_mat)
+            # Remove any SNPs not in ld matrix
+            snplist <- snplist[snplist %in% colnames(ld_mat)]
+            x <- x |> dplyr::filter(SNP %in% snplist)
+            # Reorder ld matrix to match exposure data
+            ld_mat <- ld_mat[snplist, snplist]
+            rownames(ld_mat) <- paste("snp",1:nrow(ld_mat),sep = "_")
+            colnames(ld_mat) <- rownames(ld_mat)
           }
 
           # Convert to MendelianRandomization package input with correlations
@@ -142,6 +157,15 @@ for(i in 1:length(harmonised_studies)){
       } else {
         # For all other instrument sets use standard TwoSampleMR::mr()
         res_split <- lapply(dat_split, function(x){
+
+          skip_split <- (nrow(x) == 1 & is.na(x$mr_keep[1])) | (nrow(x) == 1 & x$mr_keep[1] == FALSE)
+          if(skip_split == TRUE){
+            res <- data.frame(
+              id.exposure = NA, id.outcome = NA, outcome = NA, exposure = NA, method = NA, nsnp = NA,
+              b = NA, se = NA, pval = NA, pair = names(harmonised_studies)[i], cis_trans = NA, IV_set = names(dat))
+            return(res)
+          }
+
           cis_trans <- unique(x$cis_trans)
           res <- TwoSampleMR::mr(x)
           res$pair <- names(harmonised_studies)[i]
@@ -154,19 +178,8 @@ for(i in 1:length(harmonised_studies)){
       res <- unique(do.call("rbind", res_split))
     } else {
       res <- data.frame(
-        id.exposure = NA,
-        id.outcome = NA,
-        outcome = NA,
-        exposure = NA,
-        method = NA,
-        nsnp = NA,
-        b = NA,
-        se = NA,
-        pval = NA,
-        pair = names(harmonised_studies)[i],
-        cis_trans = NA,
-        IV_set = names(dat)
-      )
+              id.exposure = NA, id.outcome = NA, outcome = NA, exposure = NA, method = NA, nsnp = NA,
+              b = NA, se = NA, pval = NA, pair = names(harmonised_studies)[i], cis_trans = NA, IV_set = names(dat))
     }
     res_list <- c(res_list, list(res))
   }

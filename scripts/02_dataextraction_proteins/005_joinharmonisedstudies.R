@@ -114,7 +114,13 @@ for (pair in study_pairs){
   out_studies <- c(obj1,obj2,obj3)
   
   # Add column names to empty dataframes
-  col_names <- lapply(out_studies, colnames) |> unlist() |> unique()
+  col_names <-  c("SNP", "effect_allele.exposure", "other_allele.exposure",
+  "effect_allele.outcome", "other_allele.outcome", "beta.exposure", "beta.outcome",
+  "eaf.exposure", "eaf.outcome", "remove", "palindromic", "ambiguous",
+  "id.outcome", "gene.outcome", "se.outcome", "pval.outcome", "chr.outcome", "pos.outcome",
+  "outcome", "mr_keep.outcome", "pval_origin.outcome", "chr.exposure",
+  "pos.exposure", "pval.exposure", "se.exposure", "exposure", "mr_keep.exposure",
+  "pval_origin.exposure", "id.exposure", "cis_trans", "ANNOTATION", "action", "SNP_index", "mr_keep", "samplesize.outcome")
   
   if(any(lapply(out_studies,nrow) == 0)){
     empty_df <- which(lapply(out_studies,nrow) == 0)
@@ -131,7 +137,9 @@ for (pair in study_pairs){
     }
   })
   
-  harmonised_studies[[pair]] <- out_studies 
+  harmonised_studies[[pair]] <- out_studies
+
+  rm(obj,obj1,obj2,obj3,out_studies) 
 }
 
 # Annotations for study sets
@@ -141,8 +149,6 @@ names(instrument_type) <- names(harmonised_studies[[1]])
 instrument_class <- c("missense|LC","pLOF","pLOF|missense|LC","synonymous","exome:common",
                       "exome:rare","exome:ultrarare","exome:rare","exome:ultrarare","genome:common","genome:common")
 names(instrument_class) <- names(harmonised_studies[[1]])
-
-rm(obj,obj1,obj2,obj3,out_studies)
 
 ## Append new harmonised studies to existing object
 if(exists("harmonised_studies_old")){
