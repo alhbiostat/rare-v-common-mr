@@ -105,19 +105,24 @@ for(i in 1:length(harmonised_studies)){
           cis_trans <- unique(x$cis_trans)
           
           # Generate LD matrix for SNPs (alleles should be correctly oriented as using alphatised GPMAP data)
-          ld_mat <- ieugwasr::ld_matrix(
+          ld_mat <- try(ieugwasr::ld_matrix(
             snplist,
             plink_bin = genetics.binaRies::get_plink_binary(),
             bfile = file.path(ld_dir, "full_rsid"),
             with_alleles = FALSE
-          )
+          ))
 
           if(length(snplist) == 1){
-            # Remove any SNPs not in ld matrix
-            snplist <- snplist[snplist %in% colnames(ld_mat)]
-            x <- x |> dplyr::filter(SNP %in% snplist)
-            rownames(ld_mat) <- paste("snp",1:nrow(ld_mat),sep = "_")
-            colnames(ld_mat) <- rownames(ld_mat)
+            if(class(ld_mat) == "try-error"){
+              # If a single instrument, but not found in the ld matrix
+              ld_mat <- matrix(data = 1, dimnames = list("snp_1","snp_1"))
+            }else{
+              # In only one instuments found in the ld matrix
+              snplist <- snplist[snplist %in% colnames(ld_mat)]
+              x <- x |> dplyr::filter(SNP %in% snplist)
+              rownames(ld_mat) <- paste("snp",1:nrow(ld_mat),sep = "_")
+              colnames(ld_mat) <- rownames(ld_mat)
+            }
           }else{
             # Remove any SNPs not in ld matrix
             snplist <- snplist[snplist %in% colnames(ld_mat)]
