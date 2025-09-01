@@ -76,7 +76,7 @@ for(i in 1:length(harmonised_studies)){
     
     message("Performing MR for ", names(harmonised_studies)[i],": ", names(harmonised_studies[[i]])[j])
     
-    skip_pair <- (nrow(dat[[1]]) == 1 & is.na(dat[[1]]$mr_keep[1])) | (nrow(dat[[1]]) == 1 & dat[[1]]$mr_keep[1] == FALSE)
+    skip_pair <- (all(is.na(dat[[1]]$mr_keep)) | all(dat[[1]]$mr_keep == FALSE))
 
     if(!is.na(dat[[1]]$SNP[1]) & skip_pair == FALSE){
       # Split cis and trans instruments
@@ -93,7 +93,10 @@ for(i in 1:length(harmonised_studies)){
         # Perform MR with correlated instruments using MendelianRandomisation::mr_ivw()
         res_split <- lapply(dat_split, function(x){
           
-          skip_split <- (nrow(x) == 1 & is.na(x$mr_keep[1])) | (nrow(x) == 1 & x$mr_keep[1] == FALSE)
+          # Exclude palindromic ambiguous SNPs
+          x <- x |> dplyr::filter(mr_keep == TRUE)
+
+          skip_split <- (all(is.na(x$mr_keep)) | all(x$mr_keep == FALSE))
           if(skip_split == TRUE){
             res <- data.frame(
               id.exposure = NA, id.outcome = NA, outcome = NA, exposure = NA, method = NA, nsnp = NA,
@@ -163,7 +166,7 @@ for(i in 1:length(harmonised_studies)){
         # For all other instrument sets use standard TwoSampleMR::mr()
         res_split <- lapply(dat_split, function(x){
 
-          skip_split <- (nrow(x) == 1 & is.na(x$mr_keep[1])) | (nrow(x) == 1 & x$mr_keep[1] == FALSE)
+          skip_split <- (all(is.na(x$mr_keep)) | all(x$mr_keep == FALSE))
           if(skip_split == TRUE){
             res <- data.frame(
               id.exposure = NA, id.outcome = NA, outcome = NA, exposure = NA, method = NA, nsnp = NA,
