@@ -45,30 +45,32 @@ results_file <- paste0("results_molecular_MR_", outcome, ".rda")
 
 # Perform MR on each exposure-outcome pair, across each of 10 instrument sets (split by cis, trans and combined IVs)
 
-# Check if MR results already exist
-if(file.exists(file.path(res_dir, results_file))){
-
-  load(file.path(res_dir, results_file))
-  results_MR_old <- results_MR
-
-  # If new study pairs exist that are not in results:
-  study_pairs <- names(results_MR_old)
-  # New study pairs
-  study_pairs <- names(harmonised_studies)[!(names(harmonised_studies) %in% study_pairs)]
-
-  if(length(study_pairs) == 0){
-    message("No new study pairs to analyse")
-  }else{
-    message("New studies to analyse: ", paste(study_pairs, collapse = ", "))
-    harmonised_studies <- harmonised_studies[study_pairs]
-    results_MR <- list()
-  }
-}else{
-  results_MR <- list()
-}
-
 # Analyse each (new) study pair
 for(i in 1:length(harmonised_studies)){
+
+  # Check if MR results already exist
+  if(file.exists(file.path(res_dir, results_file))){
+    load(file.path(res_dir, results_file))
+    results_MR_old <- results_MR
+
+    # If new study pairs exist that are not in results:
+    study_pairs <- names(results_MR_old)
+    # New study pairs
+    study_pairs <- names(harmonised_studies)[!(names(harmonised_studies) %in% study_pairs)]
+
+    if(length(study_pairs) == 0){
+      message("No new study pairs to analyse")
+      break()
+    }else{
+      message("Pairs remaining: ", length(study_pairs))
+      harmonised_studies <- harmonised_studies[study_pairs]
+      i <- 1
+      results_MR <- list()
+    }
+  }else{
+    results_MR <- list()
+  }
+
   res_list <- list()
   
   for(j in 1:length(harmonised_studies[[i]])){
@@ -193,21 +195,40 @@ for(i in 1:length(harmonised_studies)){
   }
   res_join <- do.call("rbind", res_list)
   rownames(res_join) <- NULL
-  results_MR <- c(results_MR, list(res_join))
+  res_join <- list(res_join)
+  names(res_join) <- names(harmonised_studies[i])
+
+  results_MR <- c(results_MR, res_join)
+
+  ## Append new results to existing results_MR object
+  if(exists("results_MR_old")){
+    results_MR <- c(results_MR_old, results_MR)
+    # Reorder studies
+    order_studies <- names(results_MR)[order(names(results_MR))]
+    results_MR <- results_MR[order_studies]
+    
+    ## Write out results_MR object
+    message("Writing to results file: ", results_file)
+    save(results_MR, file = file.path(res_dir, results_file))
+  }else{
+    ## Write out results_MR object
+    message("Writing to results file: ", results_file)
+    save(results_MR, file = file.path(res_dir, results_file))
+  }
 }
 
-names(results_MR) <- names(harmonised_studies)
+#names(results_MR) <- names(harmonised_studies)
 
-## Append new results to existing results_MR object
-if(exists("results_MR_old")){
-  results_MR <- c(results_MR_old, results_MR)
-  # Reorder studies
-  order_studies <- names(results_MR)[order(names(results_MR))]
-  results_MR <- results_MR[order_studies]
+# ## Append new results to existing results_MR object
+# if(exists("results_MR_old")){
+#   results_MR <- c(results_MR_old, results_MR)
+#   # Reorder studies
+#   order_studies <- names(results_MR)[order(names(results_MR))]
+#   results_MR <- results_MR[order_studies]
   
-  ## Write out results_MR object
-  save(results_MR, file = file.path(res_dir, results_file))
-}else{
-  ## Write out harmonised_study object
-  save(results_MR, file = file.path(res_dir, results_file))
-}
+#   ## Write out results_MR object
+#   save(results_MR, file = file.path(res_dir, results_file))
+# }else{
+#   ## Write out harmonised_study object
+#   save(results_MR, file = file.path(res_dir, results_file))
+# }
