@@ -117,17 +117,15 @@ for(i in 1:length(harmonised_studies)){
             with_alleles = FALSE
           ))
 
-          if(length(snplist) == 1){
-            if(class(ld_mat) == "try-error"){
-              # If a single instrument, but not found in the ld matrix
-              ld_mat <- matrix(data = 1, dimnames = list("snp_1","snp_1"))
-            }else{
-              # In only one instuments found in the ld matrix
-              snplist <- snplist[snplist %in% colnames(ld_mat)]
-              x <- x |> dplyr::filter(SNP %in% snplist)
-              rownames(ld_mat) <- paste("snp",1:nrow(ld_mat),sep = "_")
-              colnames(ld_mat) <- rownames(ld_mat)
-            }
+          if(class(ld_mat) == "try-error" & length(snplist) == 1){
+            # If no instruments found in the ld reference and only a single instrument
+            ld_mat <- matrix(data = 1, dimnames = list("snp_1","snp_1"))
+          }else if(nrow(ld_mat) == 1){
+            # If only one instrument found in the ld refernce
+            snplist <- snplist[snplist %in% colnames(ld_mat)]
+            x <- x |> dplyr::filter(SNP %in% snplist)
+            rownames(ld_mat) <- paste("snp",1:nrow(ld_mat),sep = "_")
+            colnames(ld_mat) <- rownames(ld_mat)
           }else{
             # Remove any SNPs not in ld matrix
             snplist <- snplist[snplist %in% colnames(ld_mat)]
