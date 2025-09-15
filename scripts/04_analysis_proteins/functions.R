@@ -23,14 +23,27 @@ IV_sets <- c(
 # p_thresh: p-value threshold to call an IVW estimate significant 
 # n_snps: number of instruments in set in order to consider results
 
-summarise_results <- function(results_MR, p_thresh, n_snps = 0){
+summarise_results <- function(results_MR, p_thresh, n_snps = 0, cis_trans = "any"){
   
   min_p <- do.call("rbind", lapply(results_MR, function(x){
-    df <- x |> na.exclude() |>
-      dplyr::filter(method %in% c("Inverse variance weighted"), nsnp >= n_snps) |> 
-      dplyr::group_by(IV_set) |> 
-      dplyr::filter(pval == min(pval))
-    
+    if(cis_trans == "any"){
+      df <- x |> na.exclude() |>
+        dplyr::filter(method %in% c("Inverse variance weighted"), nsnp >= n_snps) |> 
+        dplyr::group_by(IV_set) |> 
+        dplyr::filter(pval == min(pval))
+    }
+    if(cis_trans == "cis"){
+      df <- x |> na.exclude() |>
+        dplyr::filter(method %in% c("Inverse variance weighted"), nsnp >= n_snps, cis_trans == "cis") |> 
+        dplyr::group_by(IV_set) |> 
+        dplyr::filter(pval == min(pval))
+    }
+    if(cis_trans == "trans"){
+      df <- x |> na.exclude() |>
+        dplyr::filter(method %in% c("Inverse variance weighted"), nsnp >= n_snps, cis_trans == "trans") |> 
+        dplyr::group_by(IV_set) |> 
+        dplyr::filter(pval == min(pval))
+    }
     out <- df$pval
     names(out) <- df$IV_set
     
@@ -41,10 +54,24 @@ summarise_results <- function(results_MR, p_thresh, n_snps = 0){
   })) 
   
   min_p_beta <- do.call("rbind", lapply(results_MR, function(x){
-    df <- x |> na.exclude() |>
-      dplyr::filter(method %in% c("Inverse variance weighted"), nsnp >= n_snps) |> 
-      dplyr::group_by(IV_set) |> 
-      dplyr::filter(pval == min(pval))
+    if(cis_trans == "any"){
+      df <- x |> na.exclude() |>
+        dplyr::filter(method %in% c("Inverse variance weighted"), nsnp >= n_snps) |> 
+        dplyr::group_by(IV_set) |> 
+        dplyr::filter(pval == min(pval))
+    }
+    if(cis_trans == "cis"){
+      df <- x |> na.exclude() |>
+        dplyr::filter(method %in% c("Inverse variance weighted"), nsnp >= n_snps, cis_trans == "cis") |> 
+        dplyr::group_by(IV_set) |> 
+        dplyr::filter(pval == min(pval))
+    }
+    if(cis_trans == "trans"){
+      df <- x |> na.exclude() |>
+        dplyr::filter(method %in% c("Inverse variance weighted"), nsnp >= n_snps, cis_trans == "trans") |> 
+        dplyr::group_by(IV_set) |> 
+        dplyr::filter(pval == min(pval))
+    }
     
     out <- df$b
     names(out) <- df$IV_set
@@ -55,7 +82,7 @@ summarise_results <- function(results_MR, p_thresh, n_snps = 0){
     return(out2)
   })) 
   
-  # Which IVW estimates significant at threshopld
+  # Which IVW estimates significant at threshold
   thresh_p <- min_p < p_thresh
   
   return(list(min_p = min_p, min_p_beta = min_p_beta, thresh_p = thresh_p))

@@ -29,10 +29,38 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE)
 
 source(here("scripts/04_analysis_proteins/functions.R"))
 ```
+
 ## Introduction
 
-...
+Classically, Mendelian Randomisation (MR) methods utilising trait-associated genetic variants from GWAS studies have employed common polymorphisms (population MAF \> 1%) targeted by genotyping chips, or reliably imputed from reference populations, to instrument modifiable exposures. However, common variants tested in GWAS typically explain a very small fraction of the variability in a measured trait, potentially exhibit pleiotropic effects acted upon by balancing selection or as a consequent of genetic linkage, and are rarely causal. Rare variants, which typically show large biological effects (e.g. through abolishing protein expression) provide a means of more unambiguously instrumenting relevant molecular processes. Comparison of causal estimates derived using differing methods of genetically instrumenting modifiable exposures may enhance the interpretation of the biological mechanisms underlying exposure-outcome relationships. This includes using variants from across the allele frequency spectrum, but also leveraging rare variant aggregate approaches to instrument gene-level perturbations in expression and function. 
 
+Here caual estimates for pairwise combinations of the **2937** molecular exposure (plasma proteins) and *11* health related compelex traits (below) have been derived using nine instrumentation strategies, with further instrument splitting into cis (variants within 1MB of the encoding gene start and end site), trans and full variant sets (a total of **27** instrument sets).
+
+**Outcomes:** Low density lipoprotein levels (LDL), Body Mass Index (BMI), Vitamin D (VitD), Triglycerides (Trig), Glycated Haemoglobin (HbA1c), Mean Platelet Volume (PlatVol), IGF-1 (IGF1), Waist-to-Hip Ratio (WHRadjBMI), Red Blood Cell Erythrocyte Count (RBCCount), Mean Corpuscular Volume (CorpVol) and Systolic Blood Pressure (SBP)
+
+### Instrumental variables (IVs)
+
+Nine sets of IVs for each protein exposure have been extracted from across two studies: 
+GWAS common variants: "Plasma proteomic associations with genetics and health in the UK Biobank" (Sun, B. 2023, Nature). 
+WES variants/gene aggregate tests: "Rare variant associations with plasma protein levels in the UK Biobank" (Dhindsa, R. 2023, Nature). 
+
+**Common GWAS**\
+Common genome-wide fine-mapped variants from the GPMAP (>1% MAF) (cis, trans and combined)\
+Common genome-wide clumped and pruned variants (>1% MAF) (cis, trans and combined)
+
+**WES (variants)**\
+Common exome-wide (>1% MAF) (cis, trans and combined)\
+Rare exome-wide (0-1% MAF) (cis, trans and combined)\
+Ultra-rare exome-wide (0-0.1% MAF) (cis, trans and combined)\
+*LD clumping was performed for common variants (for which LD matrices have been derived) only. For rare variants, instrument sets were stored both pre and post filtering to the top associated variant per gene for sensitivity analyses.*
+
+**WES (masks)**\
+pLOF burden mask (cis, trans and combined)\
+missense/low-confidence burden mask (cis, trans and combined)\
+pLOF/missense/low-confidence burden mask (cis, trans and combined)\
+synonymous burden mask (cis, trans and combined)
+
+The focus of the analyses below are largely those exposure-outcome pairs where at least one instrumentation strategy suggests a causal association between a molecular exposure and a health trait, praticularly those where rare and common variant sets show heterogeneous estimates.
 
 ## Data import
 
@@ -68,71 +96,224 @@ res_MR <- lapply(results_MR, function(x){
 
 # 2937 proteins tested per outcome
 alpha <- signif(0.05/length(res_MR$BMI),2)
-```
 
-## Summary of findings
+# IVsets
+IVsets <- c("dhindsa_exwas_mask_ptv" = "mask:pLOF",
+            "dhindsa_exwas_mask_raredmg" = "mask:missense",
+            "dhindsa_exwas_mask_ptvraredmg" = "mask:pLOF|missense",
+            "dhindsa_exwas_mask_syn" = "mask:synonymous",
+            "dhindsa_exwas_variant_common" = "exome:common",
+            "dhindsa_exwas_variant_rare" = "exome:rare",
+            "dhindsa_exwas_variant_rare_filt" = "exome:rare (filtered)",
+            "dhindsa_exwas_variant_ultrarare" = "exome:ultrarare",
+            "dhindsa_exwas_variant_ultrarare_filt" = "exome:ultrarare (filtered)",
+            "sun_gwas_variant_common_clumped" = "genome:common (clumped)",
+            "sun_gwas_variant_common_finemapped" = "genome:common (fmapped)")
 
-The number of proteins with significant causal estimates across outcomes and instrumentation strategies
+cols_IVsets <- c("darkorchid4","darkorchid3","darkorchid2","orchid",
+                 "steelblue4","steelblue3","steelblue3","steelblue1","steelblue1","darkorange2","orange")
+names(cols_IVsets) <- IVsets
 
-```{r}
-#| label: summary
-#| warning: FALSE
-#| fig.width: 12
-#| fig.height: 3
-
+# Variant-based instrument sets
 variant_IVsets <- c("dhindsa_exwas_variant_common" = "exome:common",
                     "dhindsa_exwas_variant_rare" = "exome:rare",
                     "dhindsa_exwas_variant_ultrarare" = "exome:ultrarare",
                     "sun_gwas_variant_common_clumped" = "genome:common (clumped)",
                     "sun_gwas_variant_common_finemapped" = "genome:common (fmapped)")
 
-cols_variant_IVsets <- c("steelblue4","steelblue3","steelblue1","darkorange","orange")
+cols_variant_IVsets <- c("steelblue4","steelblue3","steelblue1","darkorange2","orange")
 names(cols_variant_IVsets) <- variant_IVsets
+
+```
+
+## Comparison of IV sets
+
+The average number of genetic instruments per protein across instrument sets:
+
+```{r}
+#| label: fig-numivs
+#| fig.width: 14
+#| fig.height: 9
+
+# Number of instruments per protein for each IV set
+num_IVs <- lapply(res_MR, function(x){
+  df_out <- data.frame(expand.grid(IV_set = IV_sets, cis_trans = c("cis","trans")))
+  
+  for(i in 1:length(x)){
+    df <- x[[i]] |> dplyr::summarise(unique(nsnp), .by = c(IV_set, cis_trans))
+    colnames(df)[3] <- names(x[i])
+    df_out <- left_join(df_out, df, by = c("IV_set","cis_trans"))
+  }
+  
+  df_out <- df_out |> tidyr::pivot_longer(cols = 3:length(df_out)) |> na.exclude()
+  return(df_out)
+})
+
+num_IVs <- do.call("rbind", num_IVs) |> dplyr::mutate(outcome = sub(".*_","",name))
+
+p1 <- mapply(FUN = function(x,y){
+  x <- x |> dplyr::filter(cis_trans == y) |>
+    dplyr::mutate(label = factor(IVsets[IV_set], levels = IVsets)) |>
+    dplyr::filter(label %in% grep("exome|genome", IVsets, value = T))
+  
+  ggplot(x, aes(x = label, y = value, fill = label)) +
+    facet_grid(.~outcome) +
+    stat_boxplot(geom ='errorbar', width = 0.2) + 
+    geom_boxplot(width = 0.5) +
+    scale_y_log10() +
+    scale_fill_manual(values = cols_IVsets) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none",
+          plot.title = element_text(hjust = 0.5)) +
+    labs(x = "IV set",
+         y = "Num. instruments", 
+         title = paste0("Number of ",y ," instruments per plasma protein"))
+  
+}, x = list(num_IVs,num_IVs), y = c("cis","trans"), SIMPLIFY = FALSE)
+
+gridExtra::grid.arrange(grobs = p1)
+
+```
+
+The number of proteins able to be instrumented with at least three genetic variants across instrument sets:
+
+```{r}
+#| label: fig-summary
+#| warning: FALSE
+#| cache: TRUE
+#| fig.width: 12
+#| fig.height: 9
 
 # Number of proteins with significant causal estimates across instrument sets
 summary_sig <- lapply(res_MR, summarise_results, p_thresh = alpha, n_snps = 3)
+summary_sig_cis <- lapply(res_MR, summarise_results, p_thresh = alpha, n_snps = 3, cis_trans = "cis")
+summary_sig_trans <- lapply(res_MR, summarise_results, p_thresh = alpha, n_snps = 3, cis_trans = "trans")
 
-# Number of proteins with instrument sets (of >= n_snps) available (shown for BMI - differs slightly across outcomes depending on whether IVs are available in outcome study)
+# Number of proteins with instrument sets (of >= n_snps) available
 avail_IVs <- do.call("rbind",lapply(summary_sig, function(x){apply(x$min_p, MARGIN = 2, function(y){sum(!is.na(y))})/nrow(x$min_p) * 100}))
+avail_IVs_cis <- do.call("rbind",lapply(summary_sig_cis, function(x){apply(x$min_p, MARGIN = 2, function(y){sum(!is.na(y))})/nrow(x$min_p) * 100}))
+avail_IVs_trans <- do.call("rbind",lapply(summary_sig_trans, function(x){apply(x$min_p, MARGIN = 2, function(y){sum(!is.na(y))})/nrow(x$min_p) * 100}))
 
-avail_IVs[,names(variant_IVsets)] |> 
-  as.data.frame() |> 
-  tibble::rownames_to_column("outcome") |>
-  tidyr::pivot_longer(cols = 2:6) |>
-  dplyr::mutate(label = variant_IVsets[name]) |>
-  ggplot(aes(x = label, y = value, fill = label)) +
-  facet_grid(.~outcome) +
-  geom_col() +
-  scale_fill_manual(values = cols_variant_IVsets) +
-  theme_minimal() +
-  theme(axis.text.x = element_blank(), 
-        axis.ticks.x = element_blank(),
-        plot.title = element_text(hjust = 0.5),
-        legend.position = "bottom") +
-  labs(y = "%", title = "Percentage of O-link proteins with IV sets available (with n>=3 instruments)")
-
-### Repeat for cis and trans instruments
-
-
-# Proportion of causally associated protein across those with instruments available
-
-check <- summary_sig$BMI$thresh_p
-
-
-
-res_MR_top <- lapply(res_MR, filter_results, p_thresh = alpha, n_snps = 3)
-
-
-
-
-
-
-
-
-
-
+p2 <- mapply(FUN = function(x,y){
+  x[,names(variant_IVsets)] |> 
+    as.data.frame() |> 
+    tibble::rownames_to_column("outcome") |>
+    tidyr::pivot_longer(cols = 2:6) |>
+    dplyr::mutate(label = variant_IVsets[name]) |>
+    ggplot(aes(x = label, y = value, fill = label)) +
+    facet_grid(.~outcome) +
+    geom_col() +
+    scale_fill_manual(name = "", values = cols_variant_IVsets) +
+    theme_minimal() +
+    theme(axis.text.x = element_blank(), 
+          axis.ticks.x = element_blank(),
+          plot.title = element_text(hjust = 0.5),
+          legend.position = "bottom") +
+    labs(x = "IV set",
+         y = "%", 
+         title = paste0("Percentage of plasma proteins with ",y, "IV sets available (with n>=3 instruments)"))
+}, x = list(avail_IVs, avail_IVs_cis, avail_IVs_trans), y = c("", "cis-", "trans-"), SIMPLIFY = FALSE)
+  
+gridExtra::grid.arrange(grobs = p2)
 
 ```
+
+Of the proteins that could be successfully instrumented (with n >= 3 IVs) by all strategeis, what proportion of have significant IVW causal effects detected:
+
+
+#### NEED TO THINK ABOUT WHAT I AM TRYING TO SHOW HERE A BIT MORE ####
+
+```{r}
+#| label: fig-sigIVs
+#| message: FALSE
+#| fig.width: 12
+#| fig.height: 14
+
+# Calculate the proportion of significant exposures across variant sets
+# Keep proteins instrumentable by all variant-based IV sets
+prop_sig_IVs <- function(res_summary, p_thresh){
+  
+  df_p <- res_summary$min_p[,names(variant_IVsets)] |>
+    na.exclude() |>
+    as.data.frame() |>
+    tibble::rownames_to_column("row") |>
+    dplyr::mutate(gene = sub("_.*","",row),
+                  outcome = sub(".*_","",row)) |>
+    tidyr::pivot_longer(2:6, names_to = "IV_set", values_to = "pval")
+  
+  df_beta <- res_summary$min_p_beta[,names(variant_IVsets)] |>
+    na.exclude() |>
+    as.data.frame() |>
+    tibble::rownames_to_column("row") |>
+    dplyr::mutate(gene = sub("_.*","",row),
+                  outcome = sub(".*_","",row)) |>
+    tidyr::pivot_longer(2:6, names_to = "IV_set", values_to = "beta")
+  
+  df <- left_join(df_p, df_beta) |>
+    dplyr::mutate(call = ifelse(pval <= p_thresh & beta > 0, "sig_up",
+                                ifelse(pval <= p_thresh & beta < 0, "sig_down", "ns")))
+  
+  df_grouped <- df |> 
+    dplyr::group_by(IV_set,call) |>
+    dplyr::summarise(n_genes = n()) |>
+    dplyr::mutate(prop = n_genes/sum(n_genes) * 100,
+                  outcome = unique(df$outcome))
+  
+  return(df_grouped)
+}
+
+sig_IVs <- do.call("rbind", lapply(summary_sig, prop_sig_IVs, p_thresh = alpha))
+sig_IVs_cis <- do.call("rbind", lapply(summary_sig_cis, prop_sig_IVs, p_thresh = alpha))
+sig_IVs_trans <- do.call("rbind", lapply(summary_sig_trans, prop_sig_IVs, p_thresh = alpha))
+
+sig_IVs_0.01 <- do.call("rbind", lapply(summary_sig, prop_sig_IVs, p_thresh = 0.01))
+sig_IVs_0.01_cis <- do.call("rbind", lapply(summary_sig_cis, prop_sig_IVs, p_thresh = 0.01))
+sig_IVs_0.01_trans <- do.call("rbind", lapply(summary_sig_trans, prop_sig_IVs, p_thresh = 0.01))
+
+p3 <- mapply(function(x,y){
+  x |> dplyr::filter(call %in% c("sig_up","sig_down")) |>
+  dplyr::mutate(label = factor(variant_IVsets[IV_set])) |>
+  ggplot(aes(x = label, y = prop, fill = call)) +
+  facet_grid(.~outcome) +
+  geom_bar(position = "stack", stat = "identity") +
+  scale_fill_manual(name = "Direction of effect", values = c("steelblue","tomato"), label = c("down","up")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom") +
+  labs(x = "IV set",
+       y = "%", 
+       title = paste0("Percentage of plasma protein causally associated with outcome using ", y, "IVs (at P<=0.01)"))
+}, x = list(sig_IVs_0.05, sig_IVs_0.05_cis, sig_IVs_0.05_trans), y = c("","cis-","trans-"), SIMPLIFY = FALSE)
+
+gridExtra::grid.arrange(grobs = p3)
+
+p4 <- mapply(function(x,y){
+  x |> dplyr::filter(call %in% c("sig_up","sig_down")) |>
+  dplyr::mutate(label = factor(variant_IVsets[IV_set])) |>
+  ggplot(aes(x = label, y = prop, fill = call)) +
+  facet_grid(.~outcome) +
+  geom_bar(position = "stack", stat = "identity") +
+  scale_fill_manual(name = "Direction of effect", values = c("steelblue","tomato"), label = c("down","up")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "bottom") +
+  labs(x = "IV set",
+       y = "%", 
+       title = paste0("Percentage of plasma protein causally associated with outcome using ", y, "IVs (at P<=1.7x10^-5)"))
+}, x = list(sig_IVs, sig_IVs_cis, sig_IVs_trans), y = c("","cis-","trans-"), SIMPLIFY = FALSE)
+
+gridExtra::grid.arrange(grobs = p4)
+
+```
+
+
+
+
+
+
 
 
 Retaining exposure --> outcome pairs where all variant-based IV sets have >=4 genetic instruments and at least one gives a significant causal estimate at p < `r alpha`.
