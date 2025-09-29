@@ -13,6 +13,8 @@ IV_sets <- c(
   "sun_gwas_variant_common_finemapped",
   "sun_gwas_variant_common_clumped")
 
+## =============================================================================================================== ##
+
 # Generate summary table of results detailing:
 # min_p: the minimum p-value for IVW estimates across instrument sets
 # min_p_beta: the corresponding effect estimate
@@ -88,6 +90,8 @@ summarise_results <- function(results_MR, p_thresh, n_snps = 0, cis_trans = "any
   return(list(min_p = min_p, min_p_beta = min_p_beta, thresh_p = thresh_p))
 }
 
+## =============================================================================================================== ##
+
 # Filter results for molecular exposure --> complex trait MR to retain pairs where
 # the IVW causal estimate for at least one instrument set is significant (at p_thresh)
 # and the number of SNPs used for each variant based cis-trans instrument set is >=n_snps
@@ -120,9 +124,34 @@ filter_results <- function(results_MR, p_thresh, n_snps = 0){
     return(keep)
   })
   
-  keep <- unlist(keep)
+  keep <- names(which(keep == TRUE))
   results_filtered <- results_MR[keep]
   return(results_filtered)
 }
+
+## =============================================================================================================== ##
+
+# Test for significant heterogeneity between a pair of effect estimates
+
+effect_heterogeneity <- function(beta_vec, se_vec){
+  # Weights
+  w <- 1/(se_vec^2)
+  
+  # Mean effect
+  beta <- sum(beta_vec*w)/sum(w)
+  se <- sqrt(1/sum(w))
+  pval <- pnorm(abs(beta/se), lower.tail = FALSE)
+  
+  # Heterogeneity
+  Qj <- w * (beta-beta_vec)^2
+  Q <- sum(Qj)
+  Qdf <- length(beta_vec)-1
+  
+  if(Qdf == 0) Q <- 0
+  Qjpval <- pchisq(Qj, 1, lower.tail=FALSE)
+  Qpval <- pchisq(Q, Qdf, lower.tail=FALSE)
+  return(c(Q=Q, Qpval=Qpval))
+}
+
 
 

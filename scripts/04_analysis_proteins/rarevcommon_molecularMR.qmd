@@ -4,6 +4,7 @@ author: "Aimee Hanson"
 date: "`r format(Sys.time(), '%d %B %Y')`"
 format: 
   html:
+    embed-resources: true
     toc: true
     toc-depth: 4
     toc-location: left
@@ -77,16 +78,6 @@ for(i in 1:length(files)){
 }
 names(res_MR) <- sub(".*_MR_(.*)\\.rda","\\1", files)
 
-# Retain exposure-outcome pairs with significant IVW estimate for at least one instrumentation strategy
-# res_MR_top <- lapply(res_MR, function(x){
-#   sig_ivw <- x |> filter(method == "Inverse variance weighted" & pval < 0.05)
-#   if(nrow(sig_ivw) == 0){
-#     return(NULL)
-#   } else {
-#     return(x)
-#   }
-# }) 
-
 # 0.05/2937 proteins tested per outcome
 alpha <- signif(0.05/length(res_MR$BMI),2)
 
@@ -95,10 +86,10 @@ IVsets <- c("dhindsa_exwas_mask_ptv" = "mask:pLOF",
             "dhindsa_exwas_mask_raredmg" = "mask:missense",
             "dhindsa_exwas_mask_ptvraredmg" = "mask:pLOF|missense",
             "dhindsa_exwas_mask_syn" = "mask:synonymous",
-            "dhindsa_exwas_variant_rare" = "exome:rare",
-            "dhindsa_exwas_variant_rare_filt" = "exome:rare (filtered)",
             "dhindsa_exwas_variant_ultrarare" = "exome:ultrarare",
             "dhindsa_exwas_variant_ultrarare_filt" = "exome:ultrarare (filtered)",
+            "dhindsa_exwas_variant_rare" = "exome:rare",
+            "dhindsa_exwas_variant_rare_filt" = "exome:rare (filtered)",
             "dhindsa_exwas_variant_common" = "exome:common (clumped)",
             "sun_gwas_variant_common_clumped" = "genome:common (clumped)",
             "sun_gwas_variant_common_finemapped" = "genome:common (fmapped)")
@@ -108,10 +99,10 @@ cols_IVsets <- c("darkorchid4","darkorchid3","darkorchid2","orchid",
 names(cols_IVsets) <- IVsets
 
 # Variant-based instrument sets
-variant_IVsets <- c("dhindsa_exwas_variant_rare" = "exome:rare",
-                    "dhindsa_exwas_variant_rare_filt" = "exome:rare (filtered)",
-                    "dhindsa_exwas_variant_ultrarare" = "exome:ultrarare",
+variant_IVsets <- c("dhindsa_exwas_variant_ultrarare" = "exome:ultrarare",
                     "dhindsa_exwas_variant_ultrarare_filt" = "exome:ultrarare (filtered)",
+                    "dhindsa_exwas_variant_rare" = "exome:rare",
+                    "dhindsa_exwas_variant_rare_filt" = "exome:rare (filtered)",
                     "dhindsa_exwas_variant_common" = "exome:common (clumped)",
                     "sun_gwas_variant_common_clumped" = "genome:common (clumped)",
                     "sun_gwas_variant_common_finemapped" = "genome:common (fmapped)")
@@ -120,11 +111,11 @@ cols_variant_IVsets <- c("steelblue4","steelblue4","steelblue1","steelblue1","da
 names(cols_variant_IVsets) <- variant_IVsets
 
 # Filter variant-based instruments 
-variant_IVsets_indep <- c("dhindsa_exwas_variant_rare_filt" = "exome:rare (filtered)",
-                    "dhindsa_exwas_variant_ultrarare_filt" = "exome:ultrarare (filtered)",
-                    "dhindsa_exwas_variant_common" = "exome:common (clumped)",
-                    "sun_gwas_variant_common_clumped" = "genome:common (clumped)",
-                    "sun_gwas_variant_common_finemapped" = "genome:common (fmapped)")
+variant_IVsets_indep <- c("dhindsa_exwas_variant_ultrarare_filt" = "exome:ultrarare (filtered)",
+                          "dhindsa_exwas_variant_rare_filt" = "exome:rare (filtered)",
+                          "dhindsa_exwas_variant_common" = "exome:common (clumped)",
+                          "sun_gwas_variant_common_clumped" = "genome:common (clumped)",
+                          "sun_gwas_variant_common_finemapped" = "genome:common (fmapped)")
 
 ```
 
@@ -156,6 +147,7 @@ num_IVs <- lapply(res_MR, function(x){
 
 num_IVs <- do.call("rbind", num_IVs) |> dplyr::mutate(outcome = sub(".*_","",name))
 
+# Plot
 p1 <- mapply(FUN = function(x,y){
   x <- x |> dplyr::filter(cis_trans == y) |>
     dplyr::mutate(label = factor(IVsets[IV_set], levels = IVsets)) |>
@@ -202,6 +194,7 @@ avail_IVs <- do.call("rbind",lapply(summary_sig, function(x){apply(x$min_p, MARG
 avail_IVs_cis <- do.call("rbind",lapply(summary_sig_cis, function(x){apply(x$min_p, MARGIN = 2, function(y){sum(!is.na(y))})/nrow(x$min_p) * 100}))
 avail_IVs_trans <- do.call("rbind",lapply(summary_sig_trans, function(x){apply(x$min_p, MARGIN = 2, function(y){sum(!is.na(y))})/nrow(x$min_p) * 100}))
 
+# Plot
 p2 <- mapply(FUN = function(x,y){
   x[,names(variant_IVsets)] |> 
     as.data.frame() |> 
@@ -228,7 +221,7 @@ gridExtra::grid.arrange(grobs = p2)
 
 **Proportion of instrumented proteins with significant IVW causal effects detected across instrument sets**
 
-Restricting to only those proteins that could be successfully instrumented (with n >= 3 IVs) by all strategies shown below, a significant causal effect of protein levels on an outcome tend to be more often detected using common cis-IVs from GWAS than rare and ultra-rare cis-IVs.
+Restricting to only those proteins that could be successfully instrumented (with n >= 3 IVs) by all strategies shown below, a significant causal effect of protein levels on a given outcome tend to be more often detected using common cis-IVs from GWAS than rare and ultra-rare cis-IVs. Here, significance has been defined at two thresholds, the liberal threshold of p<=0.05 and the conservative Bonferroni adjusted significance threshold given n=2937 independent proteins tested (p<=1.7x10^-5).
 
 ```{r}
 #| label: fig-sigIVs
@@ -279,6 +272,7 @@ sig_IVs_0.01 <- do.call("rbind", lapply(summary_sig, prop_sig_IVs, p_thresh = 0.
 sig_IVs_0.01_cis <- do.call("rbind", lapply(summary_sig_cis, prop_sig_IVs, p_thresh = 0.01))
 sig_IVs_0.01_trans <- do.call("rbind", lapply(summary_sig_trans, prop_sig_IVs, p_thresh = 0.01))
 
+# Plot
 p3 <- mapply(function(x,y){
   x |> dplyr::filter(call %in% c("sig_up","sig_down")) |>
   dplyr::mutate(label = factor(variant_IVsets_indep[IV_set], levels = variant_IVsets_indep)) |>
@@ -322,11 +316,11 @@ gridExtra::grid.arrange(grobs = p4)
 **Comparison of IVW effect estimates across instrument sets**
 
 ```{r}
-#| label: fig-compIVs
+#| label: compare estimates
 #| cache: TRUE
 #| message: FALSE
-#| fig.width: 14
-#| fig.height: 6
+
+# Functions
 
 # Generate a table of IVW estimates for a pair of instrument sets
 compare_estimates <- function(results_MR, IVset1, IVset2, n_snps=3, cis_trans="all"){
@@ -364,7 +358,68 @@ compare_estimates <- function(results_MR, IVset1, IVset2, n_snps=3, cis_trans="a
     na.exclude() |>
     dplyr::relocate(exposure,IVset1,IVset2)
   
-  df_out <- dplyr::left_join(df_out_b, df_out_se, by = ("exposure"), suffix = c(".beta",".se"))
+  ## Caluclate effect heterogeneity
+  if (!(identical(df_out_b$exposure, df_out_se$exposure) &&
+        identical(colnames(df_out_b), colnames(df_out_se)))) {
+    message("Error - mismatch of beta and SE dataframes")
+    return(NULL)
+  }
+  
+  beta_vecs <- lapply(split(df_out_b[,c(2,3)], 1:nrow(df_out_b)), as.numeric)
+  se_vecs <- lapply(split(df_out_se[,c(2,3)], 1:nrow(df_out_se)), as.numeric)
+  
+  het_res <- do.call("rbind", mapply(effect_heterogeneity, beta_vec = beta_vecs, se_vec = se_vecs, SIMPLIFY = F)) |>
+    as.data.frame() |>
+    dplyr::mutate(exposure = df_out_b$exposure, .before = "Q") |>
+    dplyr::mutate(Qpval_bon = p.adjust(Qpval, method = "bonferroni"),
+                  Qpval_fdr = p.adjust(Qpval, method = "fdr"))
+
+  df_out <- dplyr::left_join(df_out_b, df_out_se, by = "exposure", suffix = c(".beta",".se")) |>
+    dplyr::left_join(het_res, by = "exposure")
+  
+  return(df_out)
+}
+
+# Generate a table of cis vs trans IVW estimates for given instrument set
+compare_cistrans <- function(results_MR, IVset, n_snps=3){
+  # Pull out IVW estimates and SE for instrument sets
+  df <- lapply(results_MR, function(x){
+    x |> 
+      dplyr::filter(method == "Inverse variance weighted",
+                    IV_set %in% IVset,
+                    nsnp >= n_snps,
+                    cis_trans %in% c("cis","trans")) |>
+      dplyr::mutate(IV_set = paste(IV_set, cis_trans, sep = "_")) |>
+      dplyr::arrange(cis_trans)})
+  df <- df[lapply(df, nrow) == 2]
+  
+  df_out_b <- do.call("rbind",df) |> 
+    tidyr::pivot_wider(names_from = "IV_set", values_from = "b", id_cols = "exposure") |>
+    na.exclude()
+  
+  df_out_se <- do.call("rbind",df) |> 
+    tidyr::pivot_wider(names_from = "IV_set", values_from = "se", id_cols = "exposure") |>
+    na.exclude()
+  
+  ## Caluclate effect heterogeneity
+  if (!(identical(df_out_b$exposure, df_out_se$exposure) &&
+        identical(colnames(df_out_b), colnames(df_out_se)))) {
+    message("Error - mismatch of beta and SE dataframes")
+    return(NULL)
+  }
+  
+  beta_vecs <- lapply(split(df_out_b[,c(2,3)], 1:nrow(df_out_b)), as.numeric)
+  se_vecs <- lapply(split(df_out_se[,c(2,3)], 1:nrow(df_out_se)), as.numeric)
+  
+  het_res <- do.call("rbind", mapply(effect_heterogeneity, beta_vec = beta_vecs, se_vec = se_vecs, SIMPLIFY = F)) |>
+    as.data.frame() |>
+    dplyr::mutate(exposure = df_out_b$exposure, .before = "Q") |>
+    dplyr::mutate(Qpval_bon = p.adjust(Qpval, method = "bonferroni"),
+                  Qpval_fdr = p.adjust(Qpval, method = "fdr"))
+
+  df_out <- dplyr::left_join(df_out_b, df_out_se, by = "exposure", suffix = c(".beta",".se")) |>
+    dplyr::left_join(het_res, by = "exposure")
+  
   return(df_out)
 }
 
@@ -372,80 +427,279 @@ plot_estimates <- function(estimates, name){
   estimates <- as.data.frame(estimates)
   col_names <- names(estimates)
   
-  range_min <- min(min(estimates[,2]), min(estimates[,3]))
-  range_max <- max(max(estimates[,2]), max(estimates[,3]))
-  
-  lab_x <- IVsets[sub("\\.beta","",col_names[2])]
-  lab_y <- IVsets[sub("\\.beta","",col_names[3])]
+  if(any(grepl("cis|trans",col_names))){
+    lab_x <- "cis-IVs"
+    lab_y <- "trans-IVs"
+  } else {
+    lab_x <- IVsets[sub("\\.beta","",col_names[2])]
+    lab_y <- IVsets[sub("\\.beta","",col_names[3])]
+  }
   
   CI_x <- data.frame(LCI = estimates[,2] - 1.96*estimates[,4], UCI = estimates[,2] + 1.96*estimates[,4])
   CI_y <- data.frame(LCI = estimates[,3] - 1.96*estimates[,5], UCI = estimates[,3] + 1.96*estimates[,5])
-
+  
   mod_lm <- lm(estimates[,3] ~ estimates[,2])
   slope <- round(coefficients(mod_lm)[2],2)
   
-  estimates |>
+  flag_point <- estimates$Qpval_bon <= 0.05
+  
+  range_min <- min(min(estimates[,2]), min(estimates[,3])) #min(na.exclude(errorbar_xmin, errorbar_ymin)))
+  range_max <- max(max(estimates[,2]), max(estimates[,3])) #min(na.exclude(errorbar_xmax, errorbar_ymax)))
+  
+  estimates_plot <- estimates |>
+    dplyr::mutate(exposure = factor(exposure, levels = estimates$exposure[order(estimates$Qpval, decreasing = TRUE)]),
+                  errorbar_xmin = ifelse(flag_point, CI_x$LCI, NA),
+                  errorbar_xmax = ifelse(flag_point, CI_x$UCI, NA),
+                  errorbar_ymin = ifelse(flag_point, CI_y$LCI, NA),
+                  errorbar_ymax = ifelse(flag_point, CI_y$UCI, NA)) |>
+    dplyr::arrange(exposure)
+  
+  estimates_plot |>
     ggplot(aes_string(x = col_names[2], y = col_names[3])) +
     geom_abline(slope = 1, intercept = 0, colour = "steelblue", lty = 2, lwd = 0.5) +
-    #geom_errorbar(xmin = CI_x$LCI, xmax = CI_x$UCI, ymin = CI_y$LCI, ymax = CI_y$UCI) +
-    geom_point(size = 2, alpha = 0.7, shape = 16) +
+    geom_point(aes(colour = estimates_plot$Qpval_bon <= 0.05), size = 2, shape = 16) +  
+    geom_errorbar(xmin = estimates_plot$errorbar_xmin,
+                  xmax = estimates_plot$errorbar_xmax, colour = "tomato") +
+    geom_errorbar(ymin = estimates_plot$errorbar_ymin,
+                  ymax = estimates_plot$errorbar_ymax, colour = "tomato") +
     geom_smooth(method = "lm", se = FALSE, colour = "tomato", lwd = 0.5) +
     annotate(geom = "text", x = range_min/2, y = range_max, label = paste0("Slope=",slope), size = 3, colour = "tomato") +
+    scale_colour_manual(values = c("black","tomato")) +
     scale_x_continuous(limits = c(range_min, range_max)) +
     scale_y_continuous(limits = c(range_min, range_max)) +
     theme_minimal() +
-    theme(plot.title = element_text(hjust = 0.5, size = 10)) +
+    theme(plot.title = element_text(hjust = 0.5, size = 10), legend.position = "none") +
     labs(x=lab_x, y=lab_y, title = name)
 }
 
-comp_IVWs_common <- lapply(res_MR, FUN = compare_estimates, 
+```
+
+1a) Common variant cis-IVs (finemapped vs clumped)\
+1b) Common variant trans-IVs (finemapped vs clumped)
+
+2a) Common variant cis-IVs (GWAS vs ExWAS)\
+2b) Common variant trans-IVs (GWAS vs ExWAS)
+
+```{r}
+#| label: fig-compIVs-common
+#| cache: TRUE
+#| message: FALSE
+#| fig.width: 14
+#| fig.height: 6
+
+comp_IVWs_common_1a <- lapply(res_MR, FUN = compare_estimates, 
+                    IVset1 = "sun_gwas_variant_common_clumped",
+                    IVset2 = "sun_gwas_variant_common_finemapped",
+                    n_snps = 3, cis_trans = "cis")
+
+gridExtra::grid.arrange(grobs = mapply(plot_estimates, estimates = comp_IVWs_common_1a, name = names(comp_IVWs_common_1a), SIMPLIFY = FALSE), nrow = 2,
+                        top = "Comparison of IVW estimates from common cis-pQTL instruments (finemapped vs clumped)")
+
+comp_IVWs_common_1b <- lapply(res_MR, FUN = compare_estimates, 
+                    IVset1 = "sun_gwas_variant_common_clumped",
+                    IVset2 = "sun_gwas_variant_common_finemapped",
+                    n_snps = 3, cis_trans = "trans")
+
+gridExtra::grid.arrange(grobs = mapply(plot_estimates, estimates = comp_IVWs_common_1b, name = names(comp_IVWs_common_1b), SIMPLIFY = FALSE), nrow = 2,
+                        top = "Comparison of IVW estimates from common trans-pQTL instruments (finemapped vs clumped)")
+
+comp_IVWs_common_2a <- lapply(res_MR, FUN = compare_estimates, 
                     IVset1 = "dhindsa_exwas_variant_common",
                     IVset2 = "sun_gwas_variant_common_clumped",
-                    n_snps = 3)
+                    n_snps = 3, cis_trans = "cis")
 
-gridExtra::grid.arrange(grobs = mapply(plot_estimates, estimates = comp_IVWs_common, name = names(comp_IVWs_common), SIMPLIFY = FALSE), nrow = 2,
-                        top = "Comparison of IVW estimates from GWAS common and WES common pQTL instrumentation strategies")
+gridExtra::grid.arrange(grobs = mapply(plot_estimates, estimates = comp_IVWs_common_2a, name = names(comp_IVWs_common_2a), SIMPLIFY = FALSE), nrow = 2,
+                        top = "Comparison of IVW estimates from GWAS common and WES common cis-pQTL instrumentation strategies")
 
-comp_IVWs <- lapply(res_MR, FUN = compare_estimates, 
+comp_IVWs_common_2b <- lapply(res_MR, FUN = compare_estimates, 
                     IVset1 = "dhindsa_exwas_variant_common",
-                    IVset2 = "dhindsa_exwas_variant_rare_filt",
+                    IVset2 = "sun_gwas_variant_common_clumped",
+                    n_snps = 3, cis_trans = "trans")
+
+gridExtra::grid.arrange(grobs = mapply(plot_estimates, estimates = comp_IVWs_common_2b, name = names(comp_IVWs_common_2b), SIMPLIFY = FALSE), nrow = 2,
+                        top = "Comparison of IVW estimates from GWAS common and WES common trans-pQTL instrumentation strategies")
+
+```
+
+3a) Common vs rare variant cis-IVs (ExWAS)\
+3b) Common vs rare variant trans-IVs (ExWAS)
+
+4a) Common vs ultra-rare variant cis-IVs (ExWAS)\
+4b) Common vs ultra-rare variant trans-IVs (ExWAS)
+
+```{r}
+#| label: fig-compIVs-commonvrare
+#| cache: TRUE
+#| message: FALSE
+#| fig.width: 14
+#| fig.height: 6
+
+comp_IVWs_3a <- lapply(res_MR, FUN = compare_estimates, 
+                    IVset1 = "dhindsa_exwas_variant_common",
+                    IVset2 = "dhindsa_exwas_variant_rare",
                     n_snps = 3,
                     cis_trans = "cis")
 
-gridExtra::grid.arrange(grobs = mapply(plot_estimates, estimates = comp_IVWs, name = names(comp_IVWs), SIMPLIFY = FALSE), nrow = 2,
-                        top = "Comparison of IVW estimates from WES rare and common cis-pQTL instrumentation strategies")
+gridExtra::grid.arrange(grobs = mapply(plot_estimates, estimates = comp_IVWs_3a, name = names(comp_IVWs_3a), SIMPLIFY = FALSE), nrow = 2,
+                        top = "Comparison of IVW estimates from WES common and rare cis-pQTL instrumentation strategies")
 
-comp_IVWs_2 <- lapply(res_MR, FUN = compare_estimates, 
-                    IVset1 = "sun_gwas_variant_common_clumped",
-                    IVset2 = "dhindsa_exwas_variant_rare_filt",
-                    n_snps = 3,
-                    cis_trans = "cis")
-
-gridExtra::grid.arrange(grobs = mapply(plot_estimates, estimates = comp_IVWs_2, name = names(comp_IVWs_2), SIMPLIFY = FALSE), nrow = 2,
-                        top = "Comparison of IVW estimates from WES rare and GWAS common cis-pQTL instrumentation strategies")
-
-comp_IVWs_3 <- lapply(res_MR, FUN = compare_estimates, 
+comp_IVWs_3b <- lapply(res_MR, FUN = compare_estimates, 
                     IVset1 = "dhindsa_exwas_variant_common",
-                    IVset2 = "dhindsa_exwas_variant_rare_filt",
+                    IVset2 = "dhindsa_exwas_variant_rare",
                     n_snps = 3,
                     cis_trans = "trans")
 
-gridExtra::grid.arrange(grobs = mapply(plot_estimates, estimates = comp_IVWs_3, name = names(comp_IVWs_3), SIMPLIFY = FALSE), nrow = 2,
-                        top = "Comparison of IVW estimates from WES rare and common trans-pQTL instrumentation strategies")
+gridExtra::grid.arrange(grobs = mapply(plot_estimates, estimates = comp_IVWs_3b, name = names(comp_IVWs_3b), SIMPLIFY = FALSE), nrow = 2,
+                        top = "Comparison of IVW estimates from WES common and rare trans-pQTL instrumentation strategies")
 
-comp_IVWs_rare <- lapply(res_MR, FUN = compare_estimates, 
-                    IVset1 = "dhindsa_exwas_variant_rare",
+comp_IVWs_4a <- lapply(res_MR, FUN = compare_estimates, 
+                    IVset1 = "dhindsa_exwas_variant_common",
                     IVset2 = "dhindsa_exwas_variant_ultrarare",
+                    n_snps = 3,
+                    cis_trans = "cis")
+
+gridExtra::grid.arrange(grobs = mapply(plot_estimates, estimates = comp_IVWs_4a, name = names(comp_IVWs_4a), SIMPLIFY = FALSE), nrow = 2,
+                        top = "Comparison of IVW estimates from WES common and ultra-rare cis-pQTL instrumentation strategies")
+
+comp_IVWs_4b <- lapply(res_MR, FUN = compare_estimates, 
+                    IVset1 = "dhindsa_exwas_variant_common",
+                    IVset2 = "dhindsa_exwas_variant_ultrarare",
+                    n_snps = 3,
+                    cis_trans = "trans")
+
+gridExtra::grid.arrange(grobs = mapply(plot_estimates, estimates = comp_IVWs_4b, name = names(comp_IVWs_4b), SIMPLIFY = FALSE), nrow = 2,
+                        top = "Comparison of IVW estimates from WES common and ultra-rare trans-pQTL instrumentation strategies")
+
+# Extract list of genes with significant heterogenity between common and rare/ultrarare variant estimates (cis or trans instruments)
+het_genes <- lapply(
+  Map(c, lapply(comp_IVWs_3a, function(x){x |> dplyr::filter(Qpval_bon <= 0.05) |> dplyr::pull(exposure)}),
+      lapply(comp_IVWs_3b, function(x){x |> dplyr::filter(Qpval_bon <= 0.05) |> dplyr::pull(exposure)}),
+      lapply(comp_IVWs_4a, function(x){x |> dplyr::filter(Qpval_bon <= 0.05) |> dplyr::pull(exposure)}),
+      lapply(comp_IVWs_4b, function(x){x |> dplyr::filter(Qpval_bon <= 0.05) |> dplyr::pull(exposure)})), function(x){unique(x)})
+
+het_genes <- mapply(FUN = function(x,y){paste(x,y,sep = "_")}, x = het_genes, y = names(het_genes), SIMPLIFY = F)
+```
+
+5) Common cis-IVs vs trans-IVs (GWAS)\
+6) Common cis-IVs vs trans-IVs (ExWAS)\
+7) Rare cis-IVs vs trans-IVs (ExWAS)\
+8) Ultra-rare cis-IVs vs trans-IVs\
+
+```{r}
+#| label: fig-compIVs-cisvtrans
+#| cache: TRUE
+#| message: FALSE
+#| fig.width: 14
+#| fig.height: 6
+
+comp_IVWs_5 <- lapply(res_MR, FUN = compare_cistrans, 
+                    IVset = "sun_gwas_variant_common_clumped",
                     n_snps = 3)
 
-gridExtra::grid.arrange(grobs = mapply(plot_estimates, estimates = comp_IVWs_rare, name = names(comp_IVWs_rare), SIMPLIFY = FALSE), nrow = 2,
-                        top = "Comparison of IVW estimates from WES rare and ultrarare pQTL instrumentation strategies")
+gridExtra::grid.arrange(grobs = mapply(plot_estimates, estimates = comp_IVWs_5, name = names(comp_IVWs_5), SIMPLIFY = FALSE), nrow = 2,
+                        top = "Comparison of IVW estimates from GWAS common and cis- and trans-pQTL instrumentation strategies")
+
+comp_IVWs_6 <- lapply(res_MR, FUN = compare_cistrans, 
+                    IVset = "dhindsa_exwas_variant_common",
+                    n_snps = 3)
+
+gridExtra::grid.arrange(grobs = mapply(plot_estimates, estimates = comp_IVWs_6, name = names(comp_IVWs_6), SIMPLIFY = FALSE), nrow = 2,
+                        top = "Comparison of IVW estimates from ExWAS common and cis- and trans-pQTL instrumentation strategies")
+
+comp_IVWs_7 <- lapply(res_MR, FUN = compare_cistrans, 
+                    IVset = "dhindsa_exwas_variant_rare",
+                    n_snps = 3)
+
+gridExtra::grid.arrange(grobs = mapply(plot_estimates, estimates = comp_IVWs_7, name = names(comp_IVWs_7), SIMPLIFY = FALSE), nrow = 2,
+                        top = "Comparison of IVW estimates from ExWAS rare and cis- and trans-pQTL instrumentation strategies")
+
+comp_IVWs_8 <- lapply(res_MR, FUN = compare_cistrans, 
+                    IVset = "dhindsa_exwas_variant_ultrarare",
+                    n_snps = 3)
+
+gridExtra::grid.arrange(grobs = mapply(plot_estimates, estimates = comp_IVWs_8, name = names(comp_IVWs_7), SIMPLIFY = FALSE), nrow = 2,
+                        top = "Comparison of IVW estimates from ExWAS ultra-rare and cis- and trans-pQTL instrumentation strategies")
+                        
+```
+
+## Heterogenity in pQTL effects
+
+Restricting to those protein exposures that show signficiant causal effects on a given outcome (at p <= `r alpha` with >= 5 IVs), and significant heterogenity between rare and common variant IV sets (at P(FDR) < 0.05):
+
+```{r}
+#| label: heterogenous effects
+#| cache: TRUE
+
+# Retain exposure-outcome pairs with significant IVW estimate for at least one instrumentation strategy (with n instruments >= n_snps)
+res_MR_top <- lapply(res_MR, filter_results, p_thresh = alpha, n_snps = 5)
+
+# Filter to those with evidence of estimate heterogenity between variant sets
+res_MR_top_het <- mapply(function(x,y){x[names(x) %in% y]}, x = res_MR_top, y = het_genes, SIMPLIFY = F)
+```
+
+```{r}
+#| label: fig-forestplots1
+#| fig.width: 10
+#| fig.height: 5.5
+#| results: 'hide'
+
+# Plot estimates
+res_IVW <- lapply(res_MR_top_het, function(x){
+  df <- do.call("rbind", x) |> 
+    filter(method == "Inverse variance weighted",
+           grepl("variant",IV_set),
+           cis_trans %in% c("cis","trans")) |>
+    dplyr::mutate(instrument_class = factor(variant_IVsets[IV_set], levels = variant_IVsets))
+  return(df)})
+
+
+
+plot_forest <- function(results_IVW){
+  pd <- ggplot2::position_dodge2(width = 0.8, preserve = "single")
+  exposure <- unique(sub(".*_", "", results_IVW$pair))
+  
+  n_row <- ceiling(length(unique(results_IVW$exposure))/4)
+  
+  p <- ggplot(results_IVW, aes(x = b, y = instrument_class, colour = instrument_class)) +
+    facet_wrap(.~pair, ncol = 4, scale = "free_x") +
+    geom_vline(xintercept = 0, colour = "grey20", lty = 2) +
+    geom_point(aes(pch = cis_trans, size = nsnp), position = pd) +
+    geom_errorbarh(aes(xmin = b-1.96*se, xmax = b+1.96*se, group = cis_trans), position = pd) +
+    scale_colour_manual(values = cols_variant_IVsets) +
+    scale_shape_manual(name = "", values = c(16,1)) +
+    theme_bw() + guides(colour = "none") +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    labs(x = "IVW", y = "", size = "n (instruments)", title = paste("Outcome:", exposure))
+
+  return(p)
+}
+
+lapply(res_IVW, plot_forest)[c(1,3,6,9,11)]
+
+```
+
+```{r}
+#| label: fig-forestplots2
+#| fig.width: 10
+#| fig.height: 2.75
+#| results: 'hide'
+
+lapply(res_IVW, plot_forest)[7]
+
+```
+
+```{r}
+#| label: fig-forestplots3
+#| fig.width: 8
+#| fig.height: 2.75
+#| results: 'hide'
+
+lapply(res_IVW, plot_forest)[c(2,4,5,8,10)]
 
 ```
 
 ## Next steps
 
-- Determine which IVW estimates exhibit heterogenity between IV sets
 - Look into examples where:
   - common variants give highly significant causal estimates and rare variants don't and vice versa
   - differences between GWAS (regulatory) and WES (coding) common variant IVW estimates
