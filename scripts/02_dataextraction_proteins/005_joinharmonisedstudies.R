@@ -2,7 +2,12 @@
 # Author: A.L.Hanson
 # Purpose: Read in harmonised summary statistics for a given set of molecular exposures and outcome, and combine 
 # into a single object across instrument sets for MR
-# To run: Rscript 005_joinharmoinisedstudies.R [OUTCOME]
+# Specify additional exposure instrument p-value filter if desired
+
+# To run: Rscript 005_joinharmoinisedstudies.R [OUTCOME] [p-value GWAS] [p-value ExWAS]
+# Defaults:
+# p-value GWAS: 5x10^-8 (common)
+# p-value ExWAs: 1x10^-4 (apply to rare ExWAS varaints only, set common as above)
 
 library(dotenv)
 library(here)
@@ -14,18 +19,28 @@ data_dir <- file.path(Sys.getenv("data_dir"),"harmonised","proteomics")
 res_dir <- Sys.getenv("results_dir")
 
 args = commandArgs(trailingOnly=TRUE)
+pGWAS = 5e-8
+pExWAS = 1e-4
 
 # Check for supplied outcome
-if (length(args)!=1) {
-  stop("A single outcome must be specified", call.=FALSE)
-} else{
+if (length(args) == 1){
+  defaults = TRUE
   message("Outcome: ", args[1])
+  message("Using default p-value threholds\nGWAS: ",pGWAS,"\nExWAS: ",pExWAS)
+} else if (length(args) == 3){
+  defaults = FALSE
+  pGWAS = as.numeric(args[2])
+  pExWAS = as.numeric(args[3])
+  message("Outcome: ", args[1])
+  message("Using p-value threholds\nGWAS: ",pGWAS,"\nExWAS: ",pExWAS)
+} else{
+  stop("A single outcome must be specified (plus optional GWAS and ExWAS p-value threshold)", call.=FALSE)
 }
 
 outcome <- args[1]
-harmonised_file <- paste0("harmonised_studies_", outcome, ".rda")
+harmonised_file <- ifelse(defaults, paste0("harmonised_studies_", outcome, ".rda"), paste0("harmonised_studies_GW",pGWAS,"_EW",pExWAS,"_",outcome, ".rda"))
 
-# Load harmonised study data and reformat into single list of lists (each study pairing split into instrument classes)
+# Load harmonised study data, filter p-values if required and reformat into single list of lists (each study pairing split into instrument classes)
 
 filelist <- list.files(path = data_dir, pattern = paste0("_",outcome,".rda"))
 
@@ -87,6 +102,13 @@ for (pair in study_pairs){
       obj <- as.list(env)
       obj2 <- do.call(c, obj)
       names(obj2) <- paste0("dhindsa_exwas_variant_",names(obj$dat_harmonised))
+
+      if(defaults == FALSE){
+        obj2[names(obj$dat_harmonised) == "common"] <- lapply(
+          obj2[names(obj$dat_harmonised) == "common"], function(x){x |> dplyr::filter(pval.exposure <= pGWAS)})
+        obj2[grepl("rare",names(obj$dat_harmonised))] <- lapply(
+          obj2[grepl("rare",names(obj$dat_harmonised))], function(x){x |> dplyr::filter(pval.exposure <= pExWAS)})
+      }
     }
     
     else if(file == "sun_gwas_variant"){
@@ -94,6 +116,10 @@ for (pair in study_pairs){
       obj <- as.list(env)
       obj3 <- do.call(c, obj)
       names(obj3) <- paste0("sun_gwas_variant",sub("exposure","",names(obj$dat_harmonised)))
+
+      if(defaults == FALSE){
+        obj3 <- lapply(obj3, function(x){x |> dplyr::filter(pval.exposure <= pGWAS)})
+      }
     }
   }
 
