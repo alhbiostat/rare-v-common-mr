@@ -50,7 +50,7 @@ if(harmonised_file %in% filelist){
   load(file.path(data_dir, harmonised_file))
   harmonised_studies_old <- harmonised_studies
 
-  filelist <- filelist[!(grepl(harmonised_file, filelist))]
+  filelist <- filelist[!(grepl("harmonised_studies", filelist))]
 
   # If new study pairs exist that are not in harmonised_studies_old:
   # Exposure - outcome study pairs
@@ -71,6 +71,8 @@ if(harmonised_file %in% filelist){
   }
 }else{
   # Exposure - outcome study pairs
+  filelist <- filelist[!(grepl("harmonised_studies", filelist))]
+
   study_pairs <- sub("^.*_.*_.*_(.*_.*).rda","\\1",filelist) |> unique()
   study_pairs <- study_pairs[order(study_pairs)]
 
@@ -105,9 +107,13 @@ for (pair in study_pairs){
 
       if(defaults == FALSE){
         obj2[names(obj$dat_harmonised) == "common"] <- lapply(
-          obj2[names(obj$dat_harmonised) == "common"], function(x){x |> dplyr::filter(pval.exposure <= pGWAS)})
+          obj2[names(obj$dat_harmonised) == "common"], function(x){
+            if(nrow(x) == 0) return(x)
+            x |> dplyr::filter(pval.exposure <= pGWAS)})
         obj2[grepl("rare",names(obj$dat_harmonised))] <- lapply(
-          obj2[grepl("rare",names(obj$dat_harmonised))], function(x){x |> dplyr::filter(pval.exposure <= pExWAS)})
+          obj2[grepl("rare",names(obj$dat_harmonised))], function(x){
+            if(nrow(x) == 0) return(x)
+            x |> dplyr::filter(pval.exposure <= pExWAS)})
       }
     }
     
