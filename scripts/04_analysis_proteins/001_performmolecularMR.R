@@ -40,8 +40,9 @@ harmonised_file <- args[1]
 load(file.path(data_dir, harmonised_file)) # harmonised_studies
 message("Number of exposure:outcome pairs: ", length(harmonised_studies))
 
-outcome <- sub("harmonised_studies_(.*)\\.rda","\\1",harmonised_file)
-results_file <- paste0("results_molecular_MR_", outcome, ".rda")
+outcome <- sub(".*_","",sub("harmonised_studies_(.*)\\.rda","\\1",harmonised_file))
+extension <- sub("harmonised_studies_(.*)\\.rda","\\1",harmonised_file)
+results_file <- paste0("results_molecular_MR_", extension, ".rda")
 
 # Perform MR on each exposure-outcome pair, across each of 10 instrument sets (split by cis, trans and combined IVs)
 
