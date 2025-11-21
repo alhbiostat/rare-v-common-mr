@@ -1,17 +1,17 @@
 ---
-  title: "Comparing common and rare single variant and gene aggregate instrumentation strategies for molecular MR"
+title: "Comparing common and rare single variant and gene aggregate instrumentation strategies for molecular MR"
 author: "Aimee Hanson"
 date: "`r format(Sys.time(), '%d %B %Y')`"
 format: 
   html:
-  embed-resources: true
-toc: true
-toc-depth: 4
-toc-location: left
-page-layout: full
-code-fold: true
+    embed-resources: true
+    toc: true
+    toc-depth: 4
+    toc-location: left
+    page-layout: full
+    code-fold: true
 ---
-  
+
 ```{r}
 #| label: setup
 #| message: FALSE
@@ -36,7 +36,7 @@ source(here("scripts/04_analysis_proteins/functions.R"))
 
 ## Introduction
 
-Classically, Mendelian Randomisation (MR) methods utilising trait-associated genetic variants from GWAS studies have employed common polymorphisms (population MAF \> 1%) targeted by genotyping chips, or reliably imputed from reference populations, to instrument modifiable exposures. However, common variants tested in GWAS typically explain a very small fraction of the variability in a measured trait, potentially exhibit pleiotropic effects acted upon by balancing selection or as a consequent of genetic linkage, and are rarely causal. Rare variants, which typically show large biological effects (e.g. through abolishing protein expression) provide a means of more unambiguously instrumenting relevant molecular processes. Comparison of causal estimates derived using differing methods of genetically instrumenting modifiable exposures may enhance the interpretation of the biological mechanisms underlying exposure-outcome relationships. This includes using variants from across the allele frequency spectrum, but also leveraging rare variant aggregate approaches to instrument gene-level perturbations in expression and function. 
+Classically, Mendelian Randomisation (MR) methods utilising trait-associated genetic variants from GWAS studies have employed common polymorphisms (population MAF \> 1%) targeted by genotyping chips, or reliably imputed from reference populations, to instrument modifiable exposures. However, common variants tested in GWAS typically explain a very small fraction of the variability in a measured trait, potentially exhibit pleiotropic effects acted upon by balancing selection or as a consequent of genetic linkage, and are rarely causal. Rare variants, which typically show large biological effects (e.g. through abolishing protein expression) provide a means of more unambiguously instrumenting relevant molecular processes. Comparison of causal estimates derived using differing methods of genetically instrumenting modifiable exposures may enhance the interpretation of the biological mechanisms underlying exposure-outcome relationships. This includes using variants from across the allele frequency spectrum, but also leveraging rare variant aggregate approaches to instrument gene-level perturbations in expression and function.
 
 Here, caual estimates for pairwises combinations of **2937** molecular exposures (O-link plasma proteins) and **11** health related compelex traits (below) have been derived using nine instrumentation strategies, with further instrument splitting into cis (variants within 1MB of the encoding gene start and end site), trans and full variant sets (a total of **27** instrument sets per exposure).
 
@@ -44,20 +44,20 @@ Here, caual estimates for pairwises combinations of **2937** molecular exposures
 
 ### Instrumental variable (IV) sets
 
-Nine sets of IVs for each protein exposure have been extracted from across two studies: \
-GWAS common variants: "Plasma proteomic associations with genetics and health in the UK Biobank" (Sun, B. 2023, Nature). \
-WES variants/gene aggregate tests: "Rare variant associations with plasma protein levels in the UK Biobank" (Dhindsa, R. 2023, Nature).  \
+Nine sets of IVs for each protein exposure have been extracted from across two studies:\
+GWAS common variants: "Plasma proteomic associations with genetics and health in the UK Biobank" (Sun, B. 2023, Nature).\
+WES variants/gene aggregate tests: "Rare variant associations with plasma protein levels in the UK Biobank" (Dhindsa, R. 2023, Nature).\
 
 **Common GWAS**\
-Common genome-wide fine-mapped variants from the GPMAP (>1% MAF) (cis, trans and combined)\
-Common genome-wide clumped and pruned variants (>1% MAF) (cis, trans and combined)
+Common genome-wide fine-mapped variants from the GPMAP (\>1% MAF) (cis, trans and combined)\
+Common genome-wide clumped and pruned variants (\>1% MAF) (cis, trans and combined)
 
 **WES (variants)**\
-Common exome-wide (>1% MAF) (cis, trans and combined)\
+Common exome-wide (\>1% MAF) (cis, trans and combined)\
 Rare exome-wide (0-1% MAF) (cis, trans and combined)\
 Ultra-rare exome-wide (0-0.1% MAF) (cis, trans and combined)\
 *LD clumping was performed for common variants (for which LD matrices have been derived) only. For rare variants, instrument sets were stored both pre and post filtering to the top associated variant per gene for sensitivity analyses.*
-  
+
 **WES (masks)**\
 pLOF burden mask (cis, trans and combined)\
 missense/low-confidence burden mask (cis, trans and combined)\
@@ -66,10 +66,10 @@ synonymous burden mask (cis, trans and combined)
 
 ## Data import
 
-For direct comparison of the performance of instrument sets, the theshold for pQTL significance has been set at 5x10^-8 for both rare and common variants. MR results for all exposure-outcome pairs, derived using differing IV sets, and the harmonised summary statistics of those variant sets, are read in below.
+For direct comparison of the performance of instrument sets, the theshold for pQTL significance has been set at 5x10\^-8 for both rare and common variants. MR results for all exposure-outcome pairs, derived using differing IV sets, and the harmonised summary statistics of those variant sets, are read in below.
 
 Read in MR results from `scripts/04_analysis_proteins/001_performmolecularMR.R` and harmonised summary statistics:
-  
+
 ```{r}
 #| label: import mr results
 
@@ -140,8 +140,8 @@ variant_IVsets_indep <- c("dhindsa_exwas_variant_ultrarare_filt" = "exome:ultrar
 ## Comparison of IV sets
 
 **The average number of genetic instruments (pQTLs) per protein across instrument sets**
-  
-Rare and common variant instruments (pQTLs) have been partitioned according to their proximity to the instrumented protein-coding gene into cis (+- 1MB from gene boundaries) and trans (>1MB distant) sets. A similar number of cis-IVs per protein can be derived from each of the IV sets (typically <5). Proteins that are instrumented with >50 rare cis variants fall in gene dense genomic regions. Available IVs drop when restricting to one rare variant per annotated gene, but rare IVs have not been explicitly LD pruned so it is possible that in some instances these variants are not independent. More trans-IVs are availble in the common-varaint instrument sets (both GWAS and ExWAS derived), suggesting there are fewer rare and ultra-rare variants that associate with protein levels in trans.
+
+Rare and common variant instruments (pQTLs) have been partitioned according to their proximity to the instrumented protein-coding gene into cis (+- 1MB from gene boundaries) and trans (\>1MB distant) sets. A similar number of cis-IVs per protein can be derived from each of the IV sets (typically \<5). Proteins that are instrumented with \>50 rare cis variants fall in gene dense genomic regions. Available IVs drop when restricting to one rare variant per annotated gene, but rare IVs have not been explicitly LD pruned so it is possible that in some instances these variants are not independent. More trans-IVs are availble in the common-varaint instrument sets (both GWAS and ExWAS derived), suggesting there are fewer rare and ultra-rare variants that associate with protein levels in trans.
 
 ```{r}
 #| label: fig-numivs
@@ -192,19 +192,15 @@ gridExtra::grid.arrange(grobs = p1)
 ```
 
 **The number of proteins able to be instrumented with pQTLs across instrument sets**
-  
-Note, only instrument sets including >=3 independent variants are considered.
 
-Although the power to detect highly significant rare-variant associations is expected to be lower than that for common variants due to to low alternate allele counts, an approximately equivalent percentage (~25%) of the plasma protein can be instrumented using GWAS common or ExWAS rare variants in cis (and ~10-12% with ultra-rare variants). ExWAS common variants provide less coverage, likely because fewer independent cis-variants will typically be found in the coding region of a gene than within the 1MB surrounding putative regulatory region captured by GWAS. Alternatively, over 50% of the proteome can be instrumented with ExWAS and GWAS derived common variants relative to <10% with rare and ultra-rare variants. This again suggests there are fewer (or less readily detected) rare trans-variant associations with plasma protein levels. This is slightly counterintuitive, as it would be anticipated that stronger rare varaint cis-effects on protein levels would also be detected as strong trans associations with proteins in interacting pathways.  \
+Note, only instrument sets including \>=3 independent variants are considered.
 
-What are some potential explanations for this?:
-- The common variants that exist at intermediate frequencies in a population (i.e. have not reached fixation) are acted upon by competing balancing selective forces and show a greater number of trans assocaitions across diverse biological processes (i.e. are more plieotropic). Converse to this is the idea that rare variants can only be observed in genomic regions where the DNA sequence has been evolutionarially optimised (conserved) for a highly specific biological mechanism.
-- The nature of the genes instrumented by common and rare variants is fundamentally different. For example the proteins instrumented by common cis-IVs are more often involved in the regulation of diverse cellular pathways (e.g. variants in enhancers impacting transcriptional or cell signalling regulation), where strong-effect rare variants modify protein levels or function directly, with consequences for a smaller numebr of interacting/downstream proteins?
-  
-Questions:
-- What is the relative strength (betas) of cis and trans, rare and common pQTL effects?
-- What is the intersection of the plasma proteins that have rare and common IVs available (significant pQTL associations)? 
-  
+Although the power to detect highly significant rare-variant associations is expected to be lower than that for common variants due to to low alternate allele counts, an approximately equivalent percentage (\~25%) of the plasma protein can be instrumented using GWAS common or ExWAS rare variants in cis (and \~10-12% with ultra-rare variants). ExWAS common variants provide less coverage, likely because fewer independent cis-variants will typically be found in the coding region of a gene than within the 1MB surrounding putative regulatory region captured by GWAS. Alternatively, over 50% of the proteome can be instrumented with ExWAS and GWAS derived common variants relative to \<10% with rare and ultra-rare variants. This again suggests there are fewer (or less readily detected) rare trans-variant associations with plasma protein levels. This is slightly counterintuitive, as it would be anticipated that stronger rare varaint cis-effects on protein levels would also be detected as strong trans associations with proteins in interacting pathways.\
+
+What are some potential explanations for this?: - The common variants that exist at intermediate frequencies in a population (i.e. have not reached fixation) are acted upon by competing balancing selective forces and show a greater number of trans assocaitions across diverse biological processes (i.e. are more plieotropic). Converse to this is the idea that rare variants can only be observed in genomic regions where the DNA sequence has been evolutionarially optimised (conserved) for a highly specific biological mechanism. - The nature of the genes instrumented by common and rare variants is fundamentally different. For example the proteins instrumented by common cis-IVs are more often involved in the regulation of diverse cellular pathways (e.g. variants in enhancers impacting transcriptional or cell signalling regulation), where strong-effect rare variants modify protein levels or function directly, with consequences for a smaller numebr of interacting/downstream proteins?
+
+Questions: - What is the relative strength (betas) of cis and trans, rare and common pQTL effects? - What is the intersection of the plasma proteins that have rare and common IVs available (significant pQTL associations)?
+
 ```{r}
 #| label: fig-summary
 #| warning: FALSE
@@ -247,9 +243,9 @@ gridExtra::grid.arrange(grobs = p2)
 ```
 
 **Instrument overlap**
-  
-What is the overlap in the proteins that are instrumented (using >= 3 variants) by differing instrumentation strategies?
-  
+
+What is the overlap in the proteins that are instrumented (using \>= 3 variants) by differing instrumentation strategies?
+
 ```{r}
 #| label: instrument overlap
 #| fig.width: 8
@@ -286,11 +282,11 @@ upset(fromList(upset_trans), order.by = "freq", text.scale = 1.5, mainbar.y.labe
 ```
 
 **The strength of IV associations**
-  
+
 What are the relative effect sizes of instruments (pQTLs) in the different IV sets?
-  
+
 First pull the pQTL associations for each IV set into a consistant format:
-  
+
 ```{r}
 #| label: pulling pQTLs
 
@@ -403,10 +399,10 @@ gridExtra::grid.arrange(p3,p4,nrow = 1, widths = c(0.2,0.7), top = "Observed eff
 ### Pleiotropy profiles
 
 **Cis and trans plieotropy profiles**
-  
-On average, how many molecular traits (protein levels) does a variant significantly associate with across instrument sets (e.g. ultra-rare, rare, common)?  
-  
-To assess the pleiotropy profiles of variants in each IV set, all significant pQTL associations reported with a given variant (p<=5e-8) were extracted from the O-link protein GWAS/ExWAS summary statistics. 
+
+On average, how many molecular traits (protein levels) does a variant significantly associate with across instrument sets (e.g. ultra-rare, rare, common)?
+
+To assess the pleiotropy profiles of variants in each IV set, all significant pQTL associations reported with a given variant (p\<=5e-8) were extracted from the O-link protein GWAS/ExWAS summary statistics.
 
 ```{r}
 #| label: pleiotropy matrix
@@ -489,8 +485,8 @@ gridExtra::grid.arrange(p5,p6,nrow = 1, widths = c(0.2,0.7), top = "Pleiotropy p
 ## Causal effect estimates
 
 **Proportion of instrumented proteins with significant IVW causal effects detected across instrument sets**
-  
-Restricting to only those proteins that could be successfully instrumented (with n >= 3 IVs) by all strategies shown below, a significant causal effect of protein levels on a given outcome tend to be more often detected using common cis-IVs from GWAS than rare and ultra-rare cis-IVs. Here, significance has been defined at two thresholds, the liberal threshold of p<=0.05 and the conservative Bonferroni adjusted significance threshold given n=2937 independent proteins tested (p<=1.7x10^-5).
+
+Restricting to only those proteins that could be successfully instrumented (with n \>= 3 IVs) by all strategies shown below, a significant causal effect of protein levels on a given outcome tend to be more often detected using common cis-IVs from GWAS than rare and ultra-rare cis-IVs. Here, significance has been defined at two thresholds, the liberal threshold of p\<=0.05 and the conservative Bonferroni adjusted significance threshold given n=2937 independent proteins tested (p\<=1.7x10\^-5).
 
 ```{r}
 #| label: fig-sigIVs
@@ -582,7 +578,7 @@ gridExtra::grid.arrange(grobs = p4)
 ```
 
 **Comparison of IVW effect estimates across instrument sets**
-  
+
 ```{r}
 #| label: compare estimates
 #| cache: TRUE
@@ -952,7 +948,7 @@ het_genes <- mapply(FUN = function(x,y){paste(x,y,sep = "_")}, x = het_genes, y 
 ```
 
 **Overlap between protein:outcome pairs with significant causal effectes estimated across cis-IV sets**
-  
+
 ```{r}
 #| label: upset-compIVs-common
 #| fig.width: 8
@@ -962,9 +958,9 @@ plot_upset(IVsets_list = c("sun_gwas_variant_common_clumped","dhindsa_exwas_vari
 
 ```
 
-7) Common cis-IVs vs trans-IVs (GWAS)\
-8) Common cis-IVs vs trans-IVs (ExWAS)\
-9) Rare cis-IVs vs trans-IVs (ExWAS)\
+7)  Common cis-IVs vs trans-IVs (GWAS)\
+8)  Common cis-IVs vs trans-IVs (ExWAS)\
+9)  Rare cis-IVs vs trans-IVs (ExWAS)\
 10) Ultra-rare cis-IVs vs trans-IVs\
 
 ```{r}
@@ -1015,8 +1011,8 @@ het_genes_cistrans <- mapply(FUN = function(x,y){paste(x,y,sep = "_")}, x = het_
 
 ### Heterogenity in pQTL effects
 
-Restricting to those protein exposures that show signficiant causal effects on a given outcome (at p <= 0.05 with >= 3 IVs), and significant heterogenity between rare and common cis variant IV sets (at Qstat P(FDR) < 0.05):
-  
+Restricting to those protein exposures that show signficiant causal effects on a given outcome (at p \<= 0.05 with \>= 3 IVs), and significant heterogenity between rare and common cis variant IV sets (at Qstat P(FDR) \< 0.05):
+
 ```{r}
 #| label: heterogenous effects
 #| cache: TRUE
@@ -1032,7 +1028,7 @@ res_MR_top_cistrans_het <- mapply(function(x,y){x[names(x) %in% y]}, x = res_MR_
 ```
 
 **Heterogeneity in rare v common cis IV causal estimates**
-  
+
 ```{r}
 #| label: fig-forestplots1
 #| fig.width: 8.5
@@ -1111,7 +1107,7 @@ lapply(res_IVW_cis, plot_forest)[c(7)]
 ```
 
 **Heterogeneity in cis v trans IV causal estimates**
-  
+
 ```{r}
 #| label: fig-forestplots-cistrans-1
 #| fig.width: 12
@@ -1191,14 +1187,13 @@ lapply(res_IVW_cistrans, plot_forest_cistrans)[c(10)]
 ```
 
 **Concordance vs discordance in cis and trans effects**
-  
-How often do causal estimates for a protein:outcome effect derived from cis- and trans-pQTLs agree (in terms of significance and direction of effect)?
-[TO ADD]
+
+How often do causal estimates for a protein:outcome effect derived from cis- and trans-pQTLs agree (in terms of significance and direction of effect)? \[TO ADD\]
 
 ### Consistency in pQTL effects
 
-Restricting to those protein exposures that show signficiant causal effects on a given outcome (at p <= 0.05 with >= 3 IVs) supported by rare and common cis variant IV sets (Qsat P(FDR) < 0.05):
-  
+Restricting to those protein exposures that show signficiant causal effects on a given outcome (at p \<= 0.05 with \>= 3 IVs) supported by rare and common cis variant IV sets (Qsat P(FDR) \< 0.05):
+
 ```{r}
 #| label: consistent effects
 #| fig.width: 10.5
@@ -1268,33 +1263,36 @@ lapply(res_IVW_consistant, plot_forest)[c(8)]
 
 ### Alleleic series
 
-Assessing for monotonically increasing causal effect estimates (Wald Ratios) across rare-variant series of alleles: \
-- Rare variants (<1% MAF): benign missense variants (BMV) - damaging missense variants (DMVs) - protein truncating variants (PTVs) \
+Assessing for monotonically increasing causal effect estimates (Wald Ratios) across rare-variant series of alleles:\
+- Rare variants (\<1% MAF): benign missense variants (BMV) - damaging missense variants (DMVs) - protein truncating variants (PTVs)\
 
 Using the [COAST-SS](https://github.com/insitro/AllelicSeries) approach (developed for allelic series association tests), which has been developed to handle GWAS summary statistics, but here we are passing Wald Ratios (variant protein effect/ variant outcome effect)
 
-What is needed here?:
-  - Summary statistics for all rare variants (irrespective of p-value) falling in the coding region of genes encoding the O'link plasma proteome assayed proteins \
-- The corresponding variant associations for outcomes of interest (with which to calculate Wald ratios)
-- Variant predicted functional effects (with which to categorise SNPs)
+What is needed here?: - Summary statistics for all rare variants (irrespective of p-value) falling in the coding region of genes encoding the O'link plasma proteome assayed proteins\
+- The corresponding variant associations for outcomes of interest (with which to calculate Wald ratios) - Variant predicted functional effects (with which to categorise SNPs)
 
 ### Intersting cases:
-Rare vs common IV heterogeneity:
-- CFB_Hb1Ac, MOG_HbA1c, MPO_CorpVol, KLK15_LDL, CD14_SBP, SMPD1_SBP, CDHR5_VitD
 
-Cis vs trans IV heterogeneity:
-- APOE_LDL, SBSN_VitD, CLSTN3_RBCcount, IGSF9_IGF1
+Rare vs common IV heterogeneity: - CFB_Hb1Ac, MOG_HbA1c, MPO_CorpVol, KLK15_LDL, CD14_SBP, SMPD1_SBP, CDHR5_VitD
+
+Cis vs trans IV heterogeneity: - APOE_LDL, SBSN_VitD, CLSTN3_RBCcount, IGSF9_IGF1
 
 ## Next steps
 
-- Look into examples where:
-  - common variants give highly significant causal estimates and rare variants don't and vice versa
-- differences between GWAS (regulatory) and WES (coding) common variant IVW estimates
-- differences between cis and trans instrumentation
-- Some case studies with a more thorough interrogation of where the instruments are sitting and the biology they are instrumenting
-- Look at estimates from the gene-based masks
+-   Look into examples where:
 
-- Pleiotropy:
-  - Compare the pleiotropy profiles of rare and common (and cis and trans) instruments
+    -   common variants give highly significant causal estimates and rare variants don't and vice versa
 
-- Rare regulatory variants (required WGS data)
+-   differences between GWAS (regulatory) and WES (coding) common variant IVW estimates
+
+-   differences between cis and trans instrumentation
+
+-   Some case studies with a more thorough interrogation of where the instruments are sitting and the biology they are instrumenting
+
+-   Look at estimates from the gene-based masks
+
+-   Pleiotropy:
+
+    -   Compare the pleiotropy profiles of rare and common (and cis and trans) instruments
+
+-   Rare regulatory variants (required WGS data)
