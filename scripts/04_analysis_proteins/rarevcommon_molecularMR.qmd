@@ -209,9 +209,17 @@ Questions: - What is the relative strength (betas) of cis and trans, rare and co
 #| fig.height: 12
 
 # Number of proteins with significant causal estimates across instrument sets
-summary_sig <- lapply(res_MR, summarise_results, p_thresh = alpha, n_snps = 3)
-summary_sig_cis <- lapply(res_MR, summarise_results, p_thresh = alpha, n_snps = 3, cis_trans = "cis")
-summary_sig_trans <- lapply(res_MR, summarise_results, p_thresh = alpha, n_snps = 3, cis_trans = "trans")
+#summary_sig <- lapply(res_MR, summarise_results, p_thresh = alpha, n_snps = 3)
+#summary_sig_cis <- lapply(res_MR, summarise_results, p_thresh = alpha, n_snps = 3, cis_trans = "cis")
+#summary_sig_trans <- lapply(res_MR, summarise_results, p_thresh = alpha, n_snps = 3, cis_trans = "trans")
+
+#save(summary_sig, file = file.path(res_dir, "analysis", "IVWsummary_all_molecular_MR_GW5e-08_EW5e-08_min3IVs.rda"))
+#save(summary_sig_cis, file = file.path(res_dir, "analysis", "IVWsummary_cis_molecular_MR_GW5e-08_EW5e-08_min3IVs.rda"))
+#save(summary_sig_trans, file = file.path(res_dir, "analysis", "IVWsummary_trans_molecular_MR_GW5e-08_EW5e-08_min3IVs.rda"))
+
+load(file.path(res_dir, "analysis", "IVWsummary_all_molecular_MR_GW5e-08_EW5e-08_min3IVs.rda")) #summary_sig
+load(file.path(res_dir, "analysis", "IVWsummary_cis_molecular_MR_GW5e-08_EW5e-08_min3IVs.rda")) #summary_sig_cis
+load(file.path(res_dir, "analysis", "IVWsummary_trans_molecular_MR_GW5e-08_EW5e-08_min3IVs.rda")) #summary_sig_trans
 
 # Number of proteins with instrument sets (of >= n_snps) available
 avail_IVs <- do.call("rbind",lapply(summary_sig, function(x){apply(x$min_p, MARGIN = 2, function(y){sum(!is.na(y))})/nrow(x$min_p) * 100}))
@@ -1266,10 +1274,59 @@ lapply(res_IVW_consistant, plot_forest)[c(8)]
 Assessing for monotonically increasing causal effect estimates (Wald Ratios) across rare-variant series of alleles:\
 - Rare variants (\<1% MAF): benign missense variants (BMV) - damaging missense variants (DMVs) - protein truncating variants (PTVs)\
 
-Using the [COAST-SS](https://github.com/insitro/AllelicSeries) approach (developed for allelic series association tests), which has been developed to handle GWAS summary statistics, but here we are passing Wald Ratios (variant protein effect/ variant outcome effect)
+Using the [COAST-SS](https://github.com/insitro/AllelicSeries) approach (developed for allelic series association tests), which has been developed to handle GWAS summary statistics, but here we are passing Wald Ratios (variant outcome effect/ variant protein effect)
 
-What is needed here?: - Summary statistics for all rare variants (irrespective of p-value) falling in the coding region of genes encoding the O'link plasma proteome assayed proteins\
-- The corresponding variant associations for outcomes of interest (with which to calculate Wald ratios) - Variant predicted functional effects (with which to categorise SNPs)
+What is needed here?: \
+- Summary statistics for all rare variants (capped at p<0.01 by the AzPheWAS portal for pQTLs) falling in the coding region of genes encoding the O'link plasma proteome assayed proteins\
+- The corresponding variant associations for outcomes of interest (with which to calculate Wald ratios)\ 
+- Variant predicted functional effects (with which to categorise SNPs)
+
+```{r}
+#| label: COAST-SS 
+#| fig.width: 12
+#| fig.height: 20
+
+# Load results from COAST-SS allelic series anlysis 
+# 1 = synonymous/noncoding, 2 = benign missense, 3 = deleterious missense, 4 = putative loss of funcion
+
+load(file.path(res_dir,"results_molecular_COASTSS_relaxed.rda")) # coastss_annots_relaxed
+
+## Filter out exposure genes for which there were insufficient variants for alleleic series analysis and calculate adjusted p-vals
+coastss_annots_relaxed <- lapply(coastss_annots_relaxed, function(x){
+  x |> 
+    dplyr::filter(!is.na(alleleic_skat_p)) |>
+    dplyr::mutate(adj_p = p.adjust(alleleic_skat_p, method = "BH"))
+})
+
+outcome_names <- c("LDL direct" = "LDL",
+                    "Body mass index (BMI)" = "BMI",
+                    "Vitamin D" = "Vitamin D",
+                    "Triglycerides" = "Triglycerides",
+                    "Glycated haemoglobin (HbA1c)" = "HbA1c",
+                    "Mean platelet (thrombocyte) volume" = "PlatVol",
+                    "IGF-1" = "IGF-1",
+                    "Waist-to-hip ratio adjusted for body mass index (WHRadjBMI)" = "WHRadjBMI",
+                    "Red blood cell (erythrocyte) count" = "RBCcount",
+                    "Mean corpuscular volume" = "CorpVol",
+                    "Systolic blood pressure, automated reading" = "SBP")
+                    
+
+do.call("rbind", coastss_annots_relaxed) |>
+  dplyr::mutate(label = ifelse(adj_p < 0.05, exposure, NA),
+                outcome = outcome_names[outcome]) |>
+  ggplot(aes(x = exposure, y = -log10(alleleic_skat_p))) +
+  facet_grid(outcome ~ ., scale = "free_y") +
+  geom_point(aes(colour = adj_p < 0.05)) +
+  scale_colour_manual(name = "P(FDR) < 0.05", values = c("grey","tomato")) +
+  ggrepel::geom_text_repel(aes(label = label), size = 4, max.overlaps = Inf, force = 10) +
+  theme_minimal() +
+  theme(strip.text = element_text(size = 10),
+        panel.grid = element_blank(),
+        axis.text.x = element_blank(),
+        axis.title = element_text(size = 14),
+        legend.position = "bottom") +
+  labs(x = "Protein exposure", y = "-log10(P) Allelic series")
+```
 
 ### Intersting cases:
 
