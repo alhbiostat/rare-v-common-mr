@@ -197,9 +197,13 @@ Note, only instrument sets including \>=3 independent variants are considered.
 
 Although the power to detect highly significant rare-variant associations is expected to be lower than that for common variants due to to low alternate allele counts, an approximately equivalent percentage (\~25%) of the plasma protein can be instrumented using GWAS common or ExWAS rare variants in cis (and \~10-12% with ultra-rare variants). ExWAS common variants provide less coverage, likely because fewer independent cis-variants will typically be found in the coding region of a gene than within the 1MB surrounding putative regulatory region captured by GWAS. Alternatively, over 50% of the proteome can be instrumented with ExWAS and GWAS derived common variants relative to \<10% with rare and ultra-rare variants. This again suggests there are fewer (or less readily detected) rare trans-variant associations with plasma protein levels. This is slightly counterintuitive, as it would be anticipated that stronger rare varaint cis-effects on protein levels would also be detected as strong trans associations with proteins in interacting pathways.\
 
-What are some potential explanations for this?: - The common variants that exist at intermediate frequencies in a population (i.e. have not reached fixation) are acted upon by competing balancing selective forces and show a greater number of trans assocaitions across diverse biological processes (i.e. are more plieotropic). Converse to this is the idea that rare variants can only be observed in genomic regions where the DNA sequence has been evolutionarially optimised (conserved) for a highly specific biological mechanism. - The nature of the genes instrumented by common and rare variants is fundamentally different. For example the proteins instrumented by common cis-IVs are more often involved in the regulation of diverse cellular pathways (e.g. variants in enhancers impacting transcriptional or cell signalling regulation), where strong-effect rare variants modify protein levels or function directly, with consequences for a smaller numebr of interacting/downstream proteins?
+What are some potential explanations for this?: \
+- The common variants that exist at intermediate frequencies in a population (i.e. have not reached fixation) are acted upon by competing balancing selective forces and show a greater number of trans assocaitions across diverse biological processes (i.e. are more plieotropic). Converse to this is the idea that rare variants can only be observed in genomic regions where the DNA sequence has been evolutionarially optimised (conserved) for a highly specific biological mechanism. \
+- The nature of the genes instrumented by common and rare variants is fundamentally different. For example the proteins instrumented by common cis-IVs are more often involved in the regulation of diverse cellular pathways (e.g. variants in enhancers impacting transcriptional or cell signalling regulation), where strong-effect rare variants modify protein levels or function directly, with consequences for a smaller numebr of interacting/downstream proteins?
 
-Questions: - What is the relative strength (betas) of cis and trans, rare and common pQTL effects? - What is the intersection of the plasma proteins that have rare and common IVs available (significant pQTL associations)?
+Questions: \
+- What is the relative strength (betas) of cis and trans, rare and common pQTL effects? \
+- What is the intersection of the plasma proteins that have rare and common IVs available (significant pQTL associations)?
 
 ```{r}
 #| label: fig-summary
@@ -1269,7 +1273,7 @@ lapply(res_IVW_consistant, plot_forest)[c(8)]
 
 ```
 
-### Alleleic series
+## Allelic series
 
 Assessing for monotonically increasing causal effect estimates (Wald Ratios) across rare-variant series of alleles:\
 - Rare variants (\<1% MAF): benign missense variants (BMV) - damaging missense variants (DMVs) - protein truncating variants (PTVs)\
@@ -1280,6 +1284,104 @@ What is needed here?: \
 - Summary statistics for all rare variants (capped at p<0.01 by the AzPheWAS portal for pQTLs) falling in the coding region of genes encoding the O'link plasma proteome assayed proteins\
 - The corresponding variant associations for outcomes of interest (with which to calculate Wald ratios)\ 
 - Variant predicted functional effects (with which to categorise SNPs)
+
+**Magnitude of variant class effects**
+
+Do cis-variants predicted to be more deleterious in nature (loss of function) actually have larger effects on protein expression?
+
+```{r}
+#| label: vep-classes
+#| fig.width: 7
+#| fig.height: 3
+
+# Read in variant effect estimates, wald ratios and VEP annotations
+load(file.path(res_dir,"results_molecular_waldratios_ciscodingvariants_VEPannotated.rda"))
+
+wald_ratios <- lapply(wald_ratios, function(x){
+  x$annots_relaxed <- as.factor(x$annots_relaxed)
+  x})
+
+vep_class <- c("1" = "syn./noncoding", 
+               "2" = "benign missense",
+               "3" = "del. missense",
+               "4" = "putative LoF")
+
+cols_vep <- c("1" = "steelblue", 
+              "2" = "olivedrab3",
+              "3" = "orange",
+              "4" = "tomato")
+
+# Plot variant consequnce call on cis pQTL effect
+wald_ratios$LDL |> 
+  dplyr::filter(!is.na(annots_relaxed)) |> 
+  ggplot(aes(x = beta.exposure, 
+             y = annots_relaxed)) +
+  ggridges::geom_density_ridges(aes(fill = annots_relaxed), trim = TRUE) +
+  geom_vline(xintercept = 0, colour ="grey30", linewidth = 1) + 
+  scale_y_discrete(labels = vep_class) +
+  scale_fill_manual(values = cols_vep) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  labs(x = "cis-pQTL effect", y = "Variant annotation")
+
+# Plot wald ratios split by variant consequence
+plot_wald_vep <- function(gene, outcome){
+  dat <- wald_ratios[[outcome]] |> 
+    dplyr::filter(exposure == gene) |>
+    dplyr::arrange(annots_relaxed, wald_ratio_b) |>
+    dplyr::mutate(SNP = factor(SNP, levels = SNP))
+  
+  res <- coastss_annots_relaxed[[outcome]] |>
+    dplyr::filter(exposure == gene)
+  
+  p_theme <- theme_bw() +
+    theme(plot.title = element_text(hjust = 0.5),
+          plot.subtitle = element_text(hjust = 0.5),
+          legend.position = "bottom",
+          legend.key.height = unit(0.2, 'cm'))
+  
+  # Exposure
+  p_exp <- ggplot(dat, aes(x = beta.exposure, y = SNP, colour = annots_relaxed)) +
+    geom_vline(xintercept = 0, colour = "grey20", lty = 2) +
+    geom_point() +
+    scale_colour_manual(values = cols_vep, labels = vep_class, name = "") +
+    geom_errorbarh(aes(xmin = beta.exposure-1.96*se.exposure, xmax = beta.exposure+1.96*se.exposure)) +
+    labs(x = "Bx", y = "", 
+         title = paste("Exposure:", gene),
+         subtitle = "") +
+    guides(colour = guide_legend(nrow=2, byrow=TRUE)) +
+    p_theme
+  
+  # Outcome
+  p_out <- ggplot(dat, aes(x = beta.outcome, y = SNP, colour = annots_relaxed)) +
+    geom_vline(xintercept = 0, colour = "grey20", lty = 2) +
+    geom_point() +
+    scale_colour_manual(values = cols_vep, labels = vep_class, name = "") +
+    geom_errorbarh(aes(xmin = beta.outcome-1.96*se.outcome, xmax = beta.outcome+1.96*se.outcome)) +
+    labs(x = "By", y = "", 
+         title = paste("Outcome:", outcome),
+         subtitle = "") +
+    guides(colour = guide_legend(nrow=2, byrow=TRUE)) +
+    p_theme
+  
+  # Wald Ratio
+  p_wald <- ggplot(dat, aes(x = wald_ratio_b, y = SNP, colour = annots_relaxed)) +
+    geom_vline(xintercept = 0, colour = "grey20", lty = 2) +
+    geom_point() +
+    scale_colour_manual(values = cols_vep, labels = vep_class, name = "") +
+    geom_errorbarh(aes(xmin = wald_ratio_b-1.96*wald_ratio_se, xmax = wald_ratio_b+1.96*wald_ratio_se)) +
+    labs(x = "Wald Ratio (By/Bx)", y = "", 
+         title = paste("Exposure:", gene, "Outcome:", outcome),
+         subtitle = paste("COAST-SS p-value:", signif(res$alleleic_skat_p, 2))) +
+    guides(colour = guide_legend(nrow=2, byrow=TRUE)) +
+    p_theme
+  
+  return(gridExtra::grid.arrange(grobs = list(p_wald, p_exp, p_out), nrow = 1))
+}
+
+```
+
+**Allelic series analysis**
 
 ```{r}
 #| label: COAST-SS 
@@ -1326,6 +1428,146 @@ do.call("rbind", coastss_annots_relaxed) |>
         axis.title = element_text(size = 14),
         legend.position = "bottom") +
   labs(x = "Protein exposure", y = "-log10(P) Allelic series")
+```
+
+**Dopamine Beta Hydrozylase (DBH) on systolic blood pressure**
+
+```{r}
+#| label: DBH-SBP 
+#| fig.width: 12
+#| fig.height: 4
+
+plot_wald_vep(gene = "DBH", outcome = "SBP")
+```
+
+## Gene based analysis
+
+In gene based analysis, variant aggregate approaches are used to test for the effect of carrying any single or combination of rare genetic variants in a gene on a phenotype. Variant masks are often generated based on variant properties (e.g putative loss of function or missense variants), allowing the consequence of varying degrees of gene perturbation to be assessed. Here gene-based masks have been testing for cis and trans associations with plasma protein levels and complex traits, allowing them to be used in an MR framework. It is perhaps most straight forward to handle gene-level associations as single instuments and interpret Wald ratios, although in some case multiple gene-level instruments can exist for a given exposure.
+
+```{r}
+#| label: extract-masks
+
+# Extract gene-based burden mask and calculate Wald ratios
+res_masks <- lapply(harmonised_snps, function(x){
+  masks <- lapply(x, function(y){
+    dat <- y[IV_sets[1:4]] # gene mask results
+    # Remove empty results dfs
+    dat <- dat[unlist(lapply(dat, function(x){all(!(is.na(x$SNP)))}))]
+    
+    dat <- do.call("rbind", lapply(dat, function(z){
+      z |> dplyr::select(
+        mask = test.exposure, 
+        mask_gene = SNP, 
+        chr = chr.outcome, 
+        pos = pos.outcome, 
+        exposure, outcome, 
+        beta.exposure, beta.outcome, 
+        se.exposure, se.outcome, 
+        pval.exposure, pval.outcome, 
+        cis_trans)
+    }))
+  })
+})
+
+res_masks <- lapply(res_masks, function(x){
+  out <- do.call("rbind",x)
+  rownames(out) <- NULL
+  return(out)})
+
+# Wald ratios
+res_masks <- lapply(res_masks, function(x){
+  wrs <- apply(x, MARGIN = 1, FUN = function(x){
+    TwoSampleMR::mr_wald_ratio(
+    b_exp = as.numeric(x["beta.exposure"]),
+    b_out = as.numeric(x["beta.outcome"]),
+    se_exp = as.numeric(x["se.exposure"]),
+    se_out = as.numeric(x["se.outcome"]))
+  })
+
+  wrs_df <- do.call("rbind",lapply(wrs, unlist))
+  colnames(wrs_df) <- paste("wald_ratio", colnames(wrs_df), sep = "_")
+
+  # Bind to harmonised data
+  out <- cbind(x,wrs_df)
+  return(out)
+})
+```
+
+**Gene-level cis-mask associations**
+
+Focusing on aggregate tests combining putative loss of function (protein truncating) and damaging rare varaints, which genes show significant causal effects on outcomes of interest:
+
+```{r}
+#| label: fig-maskcis_IVs
+#| fig.width: 22
+#| fig.height: 8
+  
+res_masks_cis <- lapply(res_masks, function(x){
+  out <- x |> 
+    dplyr::filter(cis_trans == "cis",
+                            mask == "ptvraredmg") |> 
+    dplyr::mutate(wald_ratio_pval_adj = p.adjust(wald_ratio_pval, method = "BH")) |>
+    dplyr::arrange(wald_ratio_pval_adj)
+  return(out)
+})
+
+# Plot Wald ratios for all gene maks associated with an outcome
+plot_wald_masks <- function(results_masks, outcome, pthresh){
+  dat <- results_masks[[outcome]] |> 
+    dplyr::filter(wald_ratio_pval_adj < pthresh) |>
+    dplyr::arrange(wald_ratio_b) |>
+    dplyr::mutate(
+      mask_gene = toupper(mask_gene),
+      mask_gene = factor(mask_gene, levels = mask_gene))
+
+  p_wald <- ggplot(dat, aes(x = wald_ratio_b, y = mask_gene)) +
+    geom_vline(xintercept = 0, colour = "grey20", lty = 2) +
+    geom_point(colour = "steelblue4", size = 2) +
+    geom_errorbarh(aes(xmin = wald_ratio_b-1.96*wald_ratio_se, xmax = wald_ratio_b+1.96*wald_ratio_se),
+                   colour = "steelblue4",
+                   height = 0.4) +
+    labs(x = "Wald Ratio (By/Bx)", y = "Burden test gene \n (instrumenting cis-protein expression)", 
+         title = paste("Outcome:", outcome),
+         subtitle = "cis-IVs (pLOF and rare damaging)") +
+    theme_bw() +
+    theme(plot.title = element_text(hjust = 0.5),
+          plot.subtitle = element_text(hjust = 0.5))
+  
+  return(p_wald)}
+
+gridExtra::grid.arrange(grobs = lapply(names(res_masks_cis)[-1], plot_wald_masks, results_masks = res_masks_cis, pthresh = 0.1),
+                        nrow = 2)
+```
+**Cis vs trans gene-level mask associations**
+
+```{r}
+
+res_masks_trans <- lapply(res_masks, function(x){
+  out <- x |> 
+    dplyr::filter(cis_trans == "trans",
+                            mask == "ptvraredmg") |> 
+    dplyr::mutate(wald_ratio_pval_adj = p.adjust(wald_ratio_pval, method = "BH")) |>
+    dplyr::arrange(wald_ratio_pval_adj)
+  return(out)
+})
+
+# Extract trans IVs for gene showing significant cis-instrumented causal effects
+comp_masks_cistrans <- mapply(x = res_masks_cis, y = res_masks_trans, function(x,y){
+  x <- x[,c("mask", "mask_gene", "exposure", "outcome", "wald_ratio_b", "wald_ratio_se", "wald_ratio_pval", "wald_ratio_pval_adj")]
+  y <- y[,c("mask", "mask_gene", "exposure", "outcome", "wald_ratio_b", "wald_ratio_se", "wald_ratio_pval", "wald_ratio_pval_adj")]
+  join_res <- x |> left_join(y, by = c("exposure", "outcome", "mask"), suffix = c("_cis","_trans"))
+  return(join_res)
+}, SIMPLIFY = F)
+
+# Plot comparison of wald ratios for significant cis or trans IV associations
+# lapply(comp_masks_cistrans, function(x){
+#   dat <- x |> 
+#     dplyr::filter(wald_ratio_pval_adj_cis < 0.1 | wald_ratio_pval_adj_trans < 0.1) |>
+#     na.exclude()
+#   
+#   dat |> ggplot(aes(x = wald_ratio_b_cis, y = wald_ratio_b_trans)) +
+#     geom_point()
+# })
 ```
 
 ### Intersting cases:
