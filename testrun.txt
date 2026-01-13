@@ -1,7 +1,10 @@
 exposure_study,outcome_study,exposure_name,outcome_name,exposure_source,outcome_source,class
-sun_pQTL_A1BG_OID30771.tsv,ieu-b-110_pQTLs_wproxies.vcf.bgz,A1BG,LDL,sun_gwas,opengwas,variant
-dhindsa_pQTL_A1BG_OID30771.tsv,genebass_ukbwes_p30780_LDL_direct.tsv,A1BG,LDL,dhindsa_exwas,genebass,variant
-dhindsa_pQTL_aggregatetest_A1BG_OID30771.tsv,genebass_ukbwes_p30780_LDL_direct_genetest.tsv,A1BG,LDL,dhindsa_exwas,genebass,mask
-sun_pQTL_ACE_OID30696.tsv,UKB-b-20175_pQTLs_wproxies.vcf.bgz,ACE,SBP,sun_gwas,opengwas,variant
-dhindsa_pQTL_ACE_OID30696.tsv,genebass_ukbwes_p4080_Systolic_blood_pressure_automated_reading.tsv,ACE,SBP,dhindsa_exwas,genebass,variant
-dhindsa_pQTL_aggregatetest_ACE_OID30696.tsv,genebass_ukbwes_p4080_Systolic_blood_pressure_automated_reading_genetest.tsv,ACE,SBP,dhindsa_exwas,genebass,mask
+cardiometabolic/acan.deletions.WES.regenie.gz,p102.deletions.WES.regenie.gz,ACAN,Pulse-rate--automated-reading,milind_deletions,milind_deletions,mask
+cardiometabolic/ace2.deletions.WES.regenie.gz,p102.deletions.WES.regenie.gz,ACE2,Pulse-rate--automated-reading,milind_deletions,milind_deletions,mask
+cardiometabolic/acox1.deletions.WES.regenie.gz,p102.deletions.WES.regenie.gz,ACOX1,Pulse-rate--automated-reading,milind_deletions,milind_deletions,mask
+cardiometabolic/acp5.deletions.WES.regenie.gz,p102.deletions.WES.regenie.gz,ACP5,Pulse-rate--automated-reading,milind_deletions,milind_deletions,mask
+cardiometabolic/acta2.deletions.WES.regenie.gz,p102.deletions.WES.regenie.gz,ACTA2,Pulse-rate--automated-reading,milind_deletions,milind_deletions,mask
+cardiometabolic/acy1.deletions.WES.regenie.gz,p102.deletions.WES.regenie.gz,ACY1,Pulse-rate--automated-reading,milind_deletions,milind_deletions,mask
+cardiometabolic/ada2.deletions.WES.regenie.gz,p102.deletions.WES.regenie.gz,ADA2,Pulse-rate--automated-reading,milind_deletions,milind_deletions,mask
+cardiometabolic/adam15.deletions.WES.regenie.gz,p102.deletions.WES.regenie.gz,ADAM15,Pulse-rate--automated-reading,milind_deletions,milind_deletions,mask
+cardiometabolic/adamts13.deletions.WES.regenie.gz,p102.deletions.WES.regenie.gz,ADAMTS13,Pulse-rate--automated-reading,milind_deletions,milind_deletions,mask

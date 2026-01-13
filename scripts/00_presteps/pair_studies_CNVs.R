@@ -6,7 +6,7 @@
 library(here)
 
 # Load environment variables
-dotenv::load_dot_env(file = "rare-v-common-mr/config.env")
+dotenv::load_dot_env(file = "config.env")
 data_dir <- Sys.getenv("data_dir")
 prot_dir <- file.path(data_dir,"sumstats","Milind_CNV_associations")
 dirs <- list.dirs(file.path(prot_dir, "CNV_Burden_Tests_Proteins"), recursive = F)
@@ -40,7 +40,9 @@ paired_studies_deletion <- expand.grid(
     outcome_name = out_phenos[match(sub("\\..*", "", outcome_study), out_phenos$field_id), "field_title"],
     exposure_source = "milind_deletions",
     outcome_source = "milind_deletions",
-    class = "mask") # 166,611 
+    class = "mask") # 166,611
+# Format outcome name
+paired_studies_deletion$outcome_name <- gsub("\\.","-",make.names(paired_studies_deletion$outcome_name))
 
 paired_studies_duplication <- expand.grid(
   exposure_study = sub(".*_Proteins\\/", "", cnv_duplication),
@@ -51,6 +53,8 @@ paired_studies_duplication <- expand.grid(
     exposure_source = "milind_duplications",
     outcome_source = "milind_duplications",
     class = "mask") # 166,611 
+# Format outcome name
+paired_studies_duplication$outcome_name <- gsub("\\.","-",make.names(paired_studies_duplication$outcome_name))
 
 paired_studies_plof <- expand.grid(
   exposure_study = sub(".*_Proteins\\/", "", cnv_plof),
@@ -61,7 +65,9 @@ paired_studies_plof <- expand.grid(
     exposure_source = "milind_plofs",
     outcome_source = "milind_plofs",
     class = "mask") # 166,611 
+# Format outcome name
+paired_studies_plof$outcome_name <- gsub("\\.","-",make.names(paired_studies_plof$outcome_name))
 
 paired_join <- rbind(paired_studies_deletion, paired_studies_duplication, paired_studies_plof) # 499,833
 
-write.csv(paired_join, here("rare-v-common-mr/allstudypairings_cnvs.csv"), row.names = F, quote = F)
+write.csv(paired_join, here("allstudypairings_cnvs.csv"), row.names = F, quote = F)
