@@ -11,6 +11,7 @@ args <- commandArgs(trailingOnly = TRUE)
 # Test args:
 # args <- c("cardiometabolic/acan.deletions.WES.regenie.gz","p102.deletions.WES.regenie.gz","ACAN","Pulse_rate__automated_reading","milind_deletions","milind_deletions","mask")
 # args <- c("cardiometabolic/pcsk9.plofs.WES.regenie.gz","p30760.plofs.WES.regenie.gz","PCSK9","HDL_cholesterol","milind_plofs","milind_plofs","mask")
+#args <- c("inflammation_ii/cfh.WES.regenie.gz","p102.WES.regenie.gz","CFH","Pulse-rate--automated-reading","milind_lofs","milind_lofs","mask")
 
 exposure_study <- args[1]
 outcome_study <- args[2]
@@ -39,12 +40,22 @@ message("Exposure: ", exposure_name, " (", exposure_study, ")\n",
   "Source: ", exposure_source, "\nClass: ", class)
 
 main <- function(exposure_study, outcome_study){
-  # Exposure pQTLs
-  exposure_dat <- data.table::fread(file.path(data_dir, "sumstats/Milind_CNV_associations/CNV_Burden_Tests_Proteins", exposure_study), data.table = FALSE)
+  # Read in exposure pQTLs
+
   # Filter to 1kb padded test (for deletions and duplications)
   if(exposure_source %in% c("milind_duplications","milind_deletions")){
+    exposure_dat <- data.table::fread(file.path(data_dir, "sumstats/Milind_CNV_associations/CNV_Burden_Tests_Proteins", exposure_study), data.table = FALSE)
     exposure_dat <- exposure_dat |> dplyr::filter(ALLELE1 == "Pad1KB.0.01")
   }
+  if(exposure_source == "milind_plofs"){
+    exposure_dat <- data.table::fread(file.path(data_dir, "sumstats/Milind_CNV_associations/CNV_Burden_Tests_Proteins", exposure_study), data.table = FALSE)
+  }
+  # Filter M2.0.01 - LoF variants with MAF < 1% and misannotation proability < 10%
+  if(exposure_source == "milind_lofs"){
+    exposure_dat <- data.table::fread(file.path(data_dir, "sumstats/Milind_CNV_associations/LoF_Burden_Tests_Proteins", exposure_study), data.table = FALSE)
+    exposure_dat <- exposure_dat |> dplyr::filter(ALLELE1 == "M2.0.01")
+  }
+
   message("n genes: ", nrow(exposure_dat))
 
   # Gene mappings
@@ -85,10 +96,18 @@ main <- function(exposure_study, outcome_study){
   
     # Extract instruments from outcome
     message("Formatting outcome data...")
-    outcome_dat <- data.table::fread(file.path(data_dir, "sumstats/Milind_CNV_associations/CNV_Burden_Tests", outcome_study), data.table = FALSE)
-  # Filter to 1kb padded test (for deletions and duplications)
+    
+    # Filter to 1kb padded test (for deletions and duplications)
     if(outcome_source %in% c("milind_duplications","milind_deletions")){
+      outcome_dat <- data.table::fread(file.path(data_dir, "sumstats/Milind_CNV_associations/CNV_Burden_Tests", outcome_study), data.table = FALSE)
       outcome_dat <- outcome_dat |> dplyr::filter(ALLELE1 == "Pad1KB.0.01")
+    }
+    if(outcome_source == "milind_plofs"){
+      outcome_dat <- data.table::fread(file.path(data_dir, "sumstats/Milind_CNV_associations/CNV_Burden_Tests", outcome_study), data.table = FALSE)
+    }
+    if(outcome_source == "milind_lofs"){
+      outcome_dat <- data.table::fread(file.path(data_dir, "sumstats/Milind_CNV_associations/LoF_Burden_Tests", outcome_study), data.table = FALSE)
+      outcome_dat <- outcome_dat |> dplyr::filter(ALLELE1 == "M2.0.01")
     }
 
     # Format outcome data

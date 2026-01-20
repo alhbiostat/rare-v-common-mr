@@ -1,13 +1,14 @@
 #!/bin/bash
 
 # Split rare variant CNV mask exposure-outcome pairs to harmonise into chunks and run in parallel
-# Usage: source runformatting_proteins_cnvs_parallel.sh [NUM_CHUNKS]
-# Example: source runformatting_proteins_cnvs_parallel.sh 20
+# Usage: source runformatting_proteins_cnvs_parallel.sh [NUM_CHUNKS] [STUDY_PAIR_LIST]
+# Example: source runformatting_proteins_cnvs_parallel.sh 20 allstudypairings_cnvs.csv
 
 source "config.env"
 
 chunks=${1:-4}  # Default to 4 chunks if not provided
-studies=${project_dir}/allstudypairings_cnvs.csv
+studies="${project_dir}/${2}"
+#studies=${project_dir}/allstudypairings_cnvs.csv
 #studies=${project_dir}/testrun.txt
 scripts_dir=${project_dir}/scripts/02_dataextraction_proteins
 chunk_dir=${data_dir}/tmp_study_chunks
