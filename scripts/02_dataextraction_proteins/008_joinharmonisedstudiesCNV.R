@@ -31,9 +31,19 @@ results_file <- paste0("results_molecular_waldratios_CNVs_", outcome, ".rda") # 
 
 filelist <- list.files(data_dir, pattern = paste0("*_", outcome, ".rda"))
 
+# Required column names
+col_names <-  c("SNP", "effect_allele.exposure", "other_allele.exposure",
+"effect_allele.outcome", "other_allele.outcome", "beta.exposure", "beta.outcome",
+"eaf.exposure", "eaf.outcome", "remove", "palindromic", "ambiguous",
+"id.outcome", "chr.outcome", "pos.outcome", "se.outcome", "outcome", "pval.outcome",
+"mr_keep.outcome", "pval_origin.outcome", "chr.exposure",
+"pos.exposure", "se.exposure", "pval.exposure", "exposure", "mr_keep.exposure",
+"pval_origin.exposure", "id.exposure", "cis_trans", "action", "SNP_index", "mr_keep", "samplesize.outcome",
+"test", "wald_ratio_b", "wald_ratio_se", "wald_ratio_pval", "wald_ratio_nsnp")
+
 # Load harmonised study data and reformat into single list of lists containing each protein exposure and CNV mask (deletion, duplication, plof)
 
-if(harmonised_file %in% filelist){
+if (harmonised_file %in% filelist) {
 
   # Load previous harmonised_studies object to append to
   load(file.path(data_dir, harmonised_file))
@@ -47,18 +57,30 @@ if(harmonised_file %in% filelist){
   # New study pairs
   study_pairs <- study_pairs[!(study_pairs %in% names(harmonised_studies_old))]
 
-  if(length(study_pairs) == 0){
+  if (length(study_pairs) == 0 & "milind_lofs" %in% names(harmonised_studies[[1]])) {
     message("No new study pairs to harmonise")
-  }else{
-    message("Num. new studies to harmonise: ", length(study_pairs))
+  } else if (length(study_pairs) == 0 & !("milind_lofs" %in% names(harmonised_studies[[1]]))) {
+    # If loss of function results are missing
+    message("LoF results to be added")
+    formatted <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
     # Copy original harmonised_studies object to backup
     file.copy(file.path(data_dir, harmonised_file), 
-            file.path(data_dir, "backup", paste0("harmonised_studies_", outcome, "_backup_", Sys.Date(), ".rda")))
+            file.path(data_dir, "backup", paste0("harmonised_studies_", outcome, "_backup_", formatted, ".rda")))
+    # Work with existing harmonised study object
+    harmonised_studies <- harmonised_studies_old
+    rm(harmonised_studies_old)
+    study_pairs <- names(harmonised_studies)
+  } else {
+    message("Num. new studies to harmonise: ", length(study_pairs))
+    # Copy original harmonised_studies object to backup
+    formatted <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
+    file.copy(file.path(data_dir, harmonised_file), 
+            file.path(data_dir, "backup", paste0("harmonised_studies_", outcome, "_backup_", formatted, ".rda")))
     # New harmonised_studies object
     harmonised_studies <- as.list(rep(NA, length(study_pairs)))
     names(harmonised_studies) <- study_pairs
   }
-}else{
+} else {
   # Exposure - outcome study pairs
   filelist <- filelist[!(grepl("harmonised_studies", filelist))]
 
@@ -72,77 +94,80 @@ if(harmonised_file %in% filelist){
 message("Joining harmonised study data across instrument sets")
 #study_pairs <- study_pairs[1:5] #test
 
+
 for (pair in study_pairs){
   message("exposure:outcome: ", pair)
+
   files <- file.path(data_dir, 
                   grep(paste0("_",pair,".rda"), list.files(path = data_dir), value = T))
   file_source <- sub(paste0("_mask_",pair,".rda"),"",basename(files))
   names(files) <- file_source
-  
-  for (file in file_source){
-    env <- new.env()
-    
-    if(file == "milind_deletions"){
-      load(files[file], envir = env)
-      obj <- as.list(env)
-      obj1 <- do.call(c, obj)
-      names(obj1) <- names(obj$wald_ratios)
-    }
-    
-    else if(file == "milind_duplications"){
-      load(files[file], envir = env)
-      obj <- as.list(env)
-      obj2 <- do.call(c, obj)
-      names(obj2) <- names(obj$wald_ratios)
-    }
-    
-    else if(file == "milind_plofs"){
-      load(files[file], envir = env)
-      obj <- as.list(env)
-      obj3 <- do.call(c, obj)
-      names(obj3) <- names(obj$wald_ratios)
-    }
-  }
 
-  # If no results for given instrument set, set to empty list
-  if(!exists("obj1")){
-    obj1 <- replicate(1, data.frame(), simplify = F)
-    names(obj1) <- "milind_deletions"
-  }
-  if(!exists("obj2")){
-    obj2 <- replicate(1, data.frame(), simplify = F)
-    names(obj2) <- "milind_duplications"
-  }
-  if(!exists("obj3")){
-    obj3 <- replicate(1, data.frame(), simplify = F)
-    names(obj3) <- "milind_plofs"
-  }
+  # If object exists but loss of function results are missing
+  if (!is.null(harmonised_studies[[pair]]) & !("milind_lofs" %in% names(harmonised_studies[[pair]]))) {
+    message("Adding LoF results")
+    load(files["milind_lofs"])
+    obj <- wald_ratios
+    if(nrow(obj[[1]]) == 0){
+      obj[[1]] <- data.frame(matrix(data = NA, nrow = 1, ncol = length(col_names), dimnames = list(NULL,col_names)))}
+    harmonised_studies[[pair]] <- do.call(c, list(harmonised_studies[[pair]], obj))
+  } else {
 
-  out_studies <- c(obj1,obj2,obj3)
-  
-  # Add column names to empty dataframes
-  col_names <-  c("SNP", "effect_allele.exposure", "other_allele.exposure",
-  "effect_allele.outcome", "other_allele.outcome", "beta.exposure", "beta.outcome",
-  "eaf.exposure", "eaf.outcome", "remove", "palindromic", "ambiguous",
-  "id.outcome", "chr.outcome", "pos.outcome", "se.outcome", "outcome", "pval.outcome",
-  "mr_keep.outcome", "pval_origin.outcome", "chr.exposure",
-  "pos.exposure", "se.exposure", "pval.exposure", "exposure", "mr_keep.exposure",
-  "pval_origin.exposure", "id.exposure", "cis_trans", "action", "SNP_index", "mr_keep", "samplesize.outcome",
-  "test", "wald_ratio_b", "wald_ratio_se", "wald_ratio_pval", "wald_ratio_nsnp")
-  
-  if(any(lapply(out_studies,nrow) == 0)){
-    empty_df <- which(lapply(out_studies,nrow) == 0)
-    for(df in empty_df){
-      out_studies[[df]] <- data.frame(matrix(data = NA, nrow = 1, ncol = length(col_names), dimnames = list(NULL,col_names)))}
-  }
-    
-  harmonised_studies[[pair]] <- out_studies
+    for (file in file_source){
+      env <- new.env()
+      
+      if (file == "milind_deletions") {
+        load(files[file], envir = env)
+        obj <- as.list(env)
+        obj1 <- do.call(c, obj)
+        names(obj1) <- names(obj$wald_ratios)
+      }
+      
+      else if (file == "milind_duplications") {
+        load(files[file], envir = env)
+        obj <- as.list(env)
+        obj2 <- do.call(c, obj)
+        names(obj2) <- names(obj$wald_ratios)
+      }
+      
+      else if (file == "milind_plofs") {
+        load(files[file], envir = env)
+        obj <- as.list(env)
+        obj3 <- do.call(c, obj)
+        names(obj3) <- names(obj$wald_ratios)
+      }
+    }
 
-  rm(obj,obj1,obj2,obj3,out_studies) 
+    # If no results for given instrument set, set to empty list
+    if (!exists("obj1")) {
+      obj1 <- replicate(1, data.frame(), simplify = F)
+      names(obj1) <- "milind_deletions"
+    }
+    if (!exists("obj2")) {
+      obj2 <- replicate(1, data.frame(), simplify = F)
+      names(obj2) <- "milind_duplications"
+    }
+    if (!exists("obj3")) {
+      obj3 <- replicate(1, data.frame(), simplify = F)
+      names(obj3) <- "milind_plofs"
+    }
+
+    out_studies <- c(obj1,obj2,obj3)
+        
+    if (any(lapply(out_studies,nrow) == 0)) {
+      empty_df <- which(lapply(out_studies,nrow) == 0)
+      for(df in empty_df){
+        out_studies[[df]] <- data.frame(matrix(data = NA, nrow = 1, ncol = length(col_names), dimnames = list(NULL,col_names)))}
+    }
+      
+    harmonised_studies[[pair]] <- out_studies
+
+    rm(obj,obj1,obj2,obj3,out_studies) 
+  }
 }
 
 ## Append new harmonised studies to existing object
-if(exists("harmonised_studies_old")){
+if (exists("harmonised_studies_old")) {
 
   harmonised_studies <- c(harmonised_studies_old, harmonised_studies)
   # Reorder studies
@@ -154,7 +179,7 @@ if(exists("harmonised_studies_old")){
   save(harmonised_studies, file = file.path(data_dir, harmonised_file))
   wald_ratios <- harmonised_studies
   save(wald_ratios, file = file.path(res_dir, results_file))
-}else{
+} else {
   ## Write out harmonised_study object
   message("Writing output to: ", harmonised_file)
   save(harmonised_studies, file = file.path(data_dir, harmonised_file))
