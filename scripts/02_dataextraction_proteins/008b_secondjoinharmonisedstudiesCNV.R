@@ -9,7 +9,7 @@ library(dplyr)
 dotenv::load_dot_env(file = here("config.env"))
 res_dir <- Sys.getenv("results_dir")
 
-files_cnvs <- list.files(res_dir, pattern = "results_molecular_waldratios_CNVs", full.names = T)
+files_cnvs <- list.files(res_dir, pattern = "results_molecular_waldratios_CNVs_[A-Z].*", full.names = T)
 
 # Import results
 res_CNVs <- list()
@@ -22,12 +22,13 @@ for(i in 1:length(files_cnvs)){
 names(res_CNVs) <- sub(".*_CNVs_(.*)\\.rda","\\1", files_cnvs)
 
 # Determine number of tests run per protein for multiple testing adjustment
-n_deletions <- unlist(lapply(res_CNVs, function(x){lapply(x, function(y){nrow(y$milind_deletions)})}))
-n_duplications <- unlist(lapply(res_CNVs, function(x){lapply(x, function(y){nrow(y$milind_duplications)})}))
-n_plofs <- unlist(lapply(res_CNVs, function(x){lapply(x, function(y){nrow(y$milind_plofs)})}))
+n_deletions <- unlist(lapply(res_CNVs, function(x){lapply(x, function(y){nrow(y$milind_deletions)})})) # max = 89
+n_duplications <- unlist(lapply(res_CNVs, function(x){lapply(x, function(y){nrow(y$milind_duplications)})})) # max = 308
+n_plofs <- unlist(lapply(res_CNVs, function(x){lapply(x, function(y){nrow(y$milind_plofs)})})) #max = 340
+n_lofs <- unlist(lapply(res_CNVs, function(x){lapply(x, function(y){nrow(y$milind_lofs)})})) #max = 2104
 
 # Adjust for the maximum number of genes with deletions, duplicatons and plofs available across traits
-n_tests <- sum(max(n_deletions),max(n_duplications),max(n_plofs)) #737 gene-level tests/trait max
+n_tests <- sum(max(n_deletions),max(n_duplications),max(n_plofs),max(n_lofs)) #737 gene-level tests/trait max
 
 # Alpha threshold
 alpha <- signif(0.05/n_tests,2) #6.8e-05

@@ -5,7 +5,7 @@
 source "config.env"
 
 scripts_dir=${project_dir}/scripts/02_dataextraction_proteins
-phenos_file=${project_dir}/phenos_cnvs.txt
+phenos_file=${project_dir}/phenos_missing.txt
 
 # Loop over each line in phenos_cnvs.txt
 while IFS= read -r outcome; do

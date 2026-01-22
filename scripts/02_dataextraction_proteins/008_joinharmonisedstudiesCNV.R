@@ -106,10 +106,17 @@ for (pair in study_pairs){
   # If object exists but loss of function results are missing
   if (!is.null(harmonised_studies[[pair]]) & !("milind_lofs" %in% names(harmonised_studies[[pair]]))) {
     message("Adding LoF results")
-    load(files["milind_lofs"])
-    obj <- wald_ratios
-    if(nrow(obj[[1]]) == 0){
-      obj[[1]] <- data.frame(matrix(data = NA, nrow = 1, ncol = length(col_names), dimnames = list(NULL,col_names)))}
+    try_catch <- try(load(files["milind_lofs"]),silent = T)
+    if(class(try_catch) == "try-error"){
+      obj <- list()
+      obj[[1]] <- data.frame(matrix(data = NA, nrow = 1, ncol = length(col_names), dimnames = list(NULL,col_names)))
+      names(obj) <- "milind_lofs"
+    } else {
+      load(files["milind_lofs"])
+      obj <- wald_ratios
+      if(nrow(obj[[1]]) == 0){
+        obj[[1]] <- data.frame(matrix(data = NA, nrow = 1, ncol = length(col_names), dimnames = list(NULL,col_names)))}
+    }
     harmonised_studies[[pair]] <- do.call(c, list(harmonised_studies[[pair]], obj))
   } else {
 
