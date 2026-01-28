@@ -31,7 +31,7 @@ n_lofs <- unlist(lapply(res_CNVs, function(x){lapply(x, function(y){nrow(y$milin
 n_tests <- sum(max(n_deletions),max(n_duplications),max(n_plofs),max(n_lofs)) #737 gene-level tests/trait max
 
 # Alpha threshold
-alpha <- signif(0.05/n_tests,2) #6.8e-05
+alpha <- signif(0.05/n_tests,2) #1.8e-05
 alpha_relaxed <- 0.05
 
 # Filter pval.exposure and save objects
@@ -44,5 +44,5 @@ CNV_relaxed <- lapply(res_CNVs, lapply, lapply,
                      pval.exposure <= alpha_relaxed)
 
 save(res_CNVs, file = file.path(res_dir, "results_molecular_waldratios_CNVs_alloutcomes.rda"))
-save(CNV_strict, file = file.path(res_dir, "results_molecular_waldratios_CNVs_alloutcomes_p7e-05.rda"))
+save(CNV_strict, file = file.path(res_dir, "results_molecular_waldratios_CNVs_alloutcomes_p1.8e-05.rda"))
 save(CNV_relaxed, file = file.path(res_dir, "results_molecular_waldratios_CNVs_alloutcomes_p0.05.rda"))
