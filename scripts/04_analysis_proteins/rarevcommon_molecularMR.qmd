@@ -71,7 +71,7 @@ For direct comparison of the performance of instrument sets, the theshold for pQ
 Read in MR results from `scripts/04_analysis_proteins/001_performmolecularMR.R` and harmonised summary statistics:
 
 ```{r}
-#| label: import mr results
+#| label: import-mr-results
 
 files <- list.files(res_dir, pattern = "results_molecular_MR_GW5e-08_EW5e-08", full.names = T)
 files_snps <- list.files(file.path(data_dir, "harmonised"), pattern = "harmonised_studies_GW5e-08_EW5e-08_[A-Z]", full.names = T)
@@ -1322,7 +1322,7 @@ wald_ratios$LDL |>
   scale_fill_manual(values = cols_vep) +
   theme_minimal() +
   theme(legend.position = "none") +
-  labs(x = "cis-pQTL effect", y = "Variant annotation")
+  labs(x = "cis-pQTL effect (beta)", y = "Variant annotation")
 
 # Plot wald ratios split by variant consequence
 plot_wald_vep <- function(gene, outcome){
@@ -1381,7 +1381,7 @@ plot_wald_vep <- function(gene, outcome){
 
 ```
 
-**Allelic series analysis**
+### COAST-SS analysis
 
 ```{r}
 #| label: COAST-SS 
@@ -1538,6 +1538,7 @@ plot_wald_masks <- function(results_masks, outcome, pthresh){
 gridExtra::grid.arrange(grobs = lapply(names(res_masks_cis)[-1], plot_wald_masks, results_masks = res_masks_cis, pthresh = 0.1),
                         nrow = 2)
 ```
+
 **Cis vs trans gene-level mask associations**
 
 ```{r}
@@ -1561,14 +1562,183 @@ comp_masks_cistrans <- mapply(x = res_masks_cis, y = res_masks_trans, function(x
 
 # Plot comparison of wald ratios for significant cis or trans IV associations
 # lapply(comp_masks_cistrans, function(x){
-#   dat <- x |> 
+#   dat <- x |>
 #     dplyr::filter(wald_ratio_pval_adj_cis < 0.1 | wald_ratio_pval_adj_trans < 0.1) |>
 #     na.exclude()
-#   
+# 
 #   dat |> ggplot(aes(x = wald_ratio_b_cis, y = wald_ratio_b_trans)) +
 #     geom_point()
 # })
 ```
+
+### Rare copy number variants (CNVs)
+
+Rare copy number variants (CNVs), including gene deletion (or complete ablation of function through loss of function mutations), and duplication (or higher order) events have been identified. As anticipated, these have been shown to have a monotonic effect on protein expression levels; that is, gene deletions reduce measured gene expression, and duplication events increase gene expression, often substantially [(Milind and Pritchard et al.)](https://pubmed.ncbi.nlm.nih.gov/40832387/). Rare genetic variation with disruptive effects on protein expression, in both directional extremes, present opportunities for protein instrumentation for molecular MR. However, it is of interest whether instrumenting gene expression using deletion and duplication events returns consistent causal estimates for exposure --> outcome effects, or non-monotonicity in genetic effects exist. The latter would suggest divergent pathways through which cis-perturbatuions of a gene may act to influence a phentoype, or potentially indicate that gene expression is not an appropriate measure of the true functional consequences of such perturbations.
+
+Wald ratios have been derived using published gene-level summary statistics (Milind et al.) for the effect of gene deletions, duplications and pLOF variants (burdan masks) on O'link plasma protein levels and a series of 56 complex traits measured in UKB individuals. Note, Wald ratios were derived for all available cis and trans gene masks and CNV events irrespective of whether the event showed a significant protein expression effect. P-value filtered results are imported below.
+
+Data: https://zenodo.org/records/16800547
+
+```{r}
+#| label: import-cnv-results
+
+# Relaxed exposure p-value threshold: <0.05
+#load(file = file.path(res_dir, "results_molecular_waldratios_CNVs_alloutcomes_p0.05.rda"))
+#res_CNVs <- CNV_relaxed
+```
+
+**Magnitude of CNV effects**
+
+```{r}
+#| label: cis-cnvs
+#| fig.width: 13
+#| fig.height: 3
+
+# Merge all results for each outcome into a single dataframe and retain cis variants
+# res_CNVs_cis <- lapply(lapply(res_CNVs, function(x){
+#   lapply(x, function(x){
+#     do.call("rbind",x)})}), function(y){
+#       out <- do.call("rbind", y) |>
+#         dplyr::filter(cis_trans == "cis")
+#       rownames(out) <- NULL
+#       return(out)})
+# 
+# save(res_CNVs_cis, file = file.path(res_dir, "results_molecular_waldratios_CNVs_alloutcomes_p0.05_cis.rda"))
+
+# Check direction of effect of cis-acting duplications, deletions and pLOFs on protein expression
+
+load(file.path(res_dir, "results_molecular_waldratios_CNVs_alloutcomes_p0.05_cis.rda")) #res_CNVs_cis
+
+# Single representitive outcome data to plot exposure associations from w no p-value filtering
+load(file.path(res_dir, "results_molecular_waldratios_CNVs_Standing-height.rda")) #wald_ratios
+dat_cnvs <- wald_ratios
+dat_cnvs_cis <- do.call("rbind",lapply(dat_cnvs, function(x){
+  do.call("rbind", x) |> dplyr::filter(cis_trans == "cis")}))
+  
+cnv_class <- c("milind_plofs" = "pLoF gene burden",
+               "milind_lofs" = "LoF gene burden",
+               "milind_duplications" = "gene duplication",
+               "milind_deletions" = "gene deletion")
+
+cols_cnv <- c("milind_deletions" = "steelblue4",
+              "milind_lofs" = "#74ADD1",
+              "milind_plofs" = "#ABD9E9",
+              "milind_duplications" = "orange")
+
+# Plot variant CNV consequnce call on cis pQTL effect
+p7 <- dat_cnvs_cis |> 
+  dplyr::mutate(test = factor(test, 
+                              levels = c("milind_deletions","milind_lofs","milind_plofs","milind_duplications"))) |>
+  ggplot(aes(x = beta.exposure, 
+             y = test)) +
+  ggridges::geom_density_ridges(aes(fill = test), trim = TRUE) +
+  geom_vline(xintercept = 0, colour ="grey30", linewidth = 1) + 
+  scale_y_discrete(labels = cnv_class) +
+  scale_fill_manual(values = cols_cnv) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  labs(x = "cis-pQTL expression effect (beta)", y = "CNV annotation")
+
+# pLOF v duplication (effect significant at p<0.05 only)
+
+p8 <- dat_cnvs_cis |>
+  dplyr::select(exposure, test, beta.exposure, se.exposure) |>
+  tidyr::pivot_wider(
+    names_from  = test,
+    values_from = c(beta.exposure, se.exposure),
+    names_glue  = "{test}_{.value}") |>
+  ggplot(aes(x = milind_lofs_beta.exposure, y = milind_duplications_beta.exposure)) +
+  geom_vline(xintercept = 0, colour ="grey30", linewidth = 1) + 
+  geom_hline(yintercept = 0, colour ="grey30", linewidth = 1) + 
+  geom_abline(slope = -1, intercept = 0, colour ="grey30", linewidth = 0.5) +
+  geom_point(size = 2, colour = "steelblue4") +
+  scale_x_continuous(limits = c(-3,3)) +
+  scale_y_continuous(limits = c(-3,3)) +
+  theme_minimal() +
+  labs(x = "cis-LoF burden effect \non protein expression", y = "cis-duplication burden effect \non protein expression")
+
+p9 <- dat_cnvs_cis |>
+  dplyr::select(exposure, test, beta.exposure, se.exposure) |>
+  tidyr::pivot_wider(
+    names_from  = test,
+    values_from = c(beta.exposure, se.exposure),
+    names_glue  = "{test}_{.value}") |>
+  ggplot(aes(x = milind_deletions_beta.exposure, y = milind_duplications_beta.exposure)) +
+  geom_vline(xintercept = 0, colour ="grey30", linewidth = 1) + 
+  geom_hline(yintercept = 0, colour ="grey30", linewidth = 1) + 
+  geom_abline(slope = -1, intercept = 0, colour ="grey30", linewidth = 0.5) +
+  geom_point(size = 2, colour = "steelblue4") +
+  scale_x_continuous(limits = c(-3,3)) +
+  scale_y_continuous(limits = c(-3,3)) +
+  theme_minimal() +
+  labs(x = "cis-deletion burden effect \non protein expression", y = "cis-duplication burden effect \non protein expression")
+
+gridExtra::grid.arrange(grobs = list(p7, p8, p9), nrow = 1, widths = c(0.5,0.25,0.25))
+
+```
+
+**Comparison of Wald Ratios**
+
+Does instrumenting a gene using a rare loss of function mutation or a rare deletion give consistant causal estiamtes?
+
+```{r}
+#| label: compare-walds
+#| fig.width: 16
+#| fig.height: 50
+
+comp_WRs_lofdups <- lapply(res_CNVs_cis, function(x){
+  
+  if(!(all(c("milind_lofs","milind_duplications") %in% x$test))){
+    return(NULL)
+    next
+  }
+  # Data frame of paired wald ratios for each gene
+  dat <- x |> dplyr::filter(test == c("milind_lofs","milind_duplications")) |>
+    dplyr::select(exposure, test, wald_ratio_b, wald_ratio_se, wald_ratio_pval) |>
+    tidyr::pivot_wider(
+      names_from  = test,
+      values_from = c(wald_ratio_b, wald_ratio_se, wald_ratio_pval),
+      names_glue  = "{test}_{.value}") |>
+    as.data.frame() |>
+    na.exclude()
+  
+  hettest <- apply(dat, MARGIN = 1, function(y){
+    effect_heterogeneity(
+      beta_vec = as.numeric(y[2:3]), 
+      se_vec = as.numeric(y[4:5]))}) |> 
+    t() |> as.data.frame() |>
+    dplyr::mutate(Qpval_adj = p.adjust(Qpval, method = "BH"))
+  
+  dat <- cbind(dat, hettest) |>
+    dplyr::mutate(outcome = unique(x$outcome)) |>
+    dplyr::arrange(Qpval_adj)
+  
+  return(dat)
+})
+    
+p10 <- lapply(comp_WRs_lofdups[sapply(comp_WRs_lofdups, is.null) == FALSE], function(x){
+  outcome <- unique(x$outcome)
+  
+  x |> ggplot(aes(x = milind_lofs_wald_ratio_b, y = milind_duplications_wald_ratio_b)) +
+    geom_abline(slope = 1, intercept = 0, colour ="grey30", linewidth = 0.5) +
+    geom_vline(xintercept = 0, colour ="grey30", linewidth = 1) + 
+    geom_hline(yintercept = 0, colour ="grey30", linewidth = 1) + 
+    geom_point(size = 3, aes(colour = Qpval_adj < 0.05)) +
+    scale_colour_manual(values = c("black","tomato")) +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5),
+          legend.position = "none") +
+    labs(x = "Wald Ratio \n(cis-LoF instrumantaion)", 
+         y = "Wald Ratio \n(cis-duplication instrumentation)",
+         title = paste("Protein ->", outcome))
+})
+
+gridExtra::grid.arrange(grobs = p10, nrow = 14)
+
+```
+
+
+
 
 ### Intersting cases:
 
