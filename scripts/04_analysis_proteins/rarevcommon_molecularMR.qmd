@@ -1683,8 +1683,8 @@ Does instrumenting a gene using a rare loss of function mutation or a rare delet
 
 ```{r}
 #| label: compare-walds
-#| fig.width: 16
-#| fig.height: 50
+#| fig.width: 14
+#| fig.height: 52
 
 comp_WRs_lofdups <- lapply(res_CNVs_cis, function(x){
   
@@ -1719,49 +1719,90 @@ comp_WRs_lofdups <- lapply(res_CNVs_cis, function(x){
 p10 <- lapply(comp_WRs_lofdups[sapply(comp_WRs_lofdups, is.null) == FALSE], function(x){
   outcome <- unique(x$outcome)
   
+  x$col_point <- factor(ifelse(x$Qpval_adj < 0.05, "Het. Q pval <0.05 (FDR)",
+                      ifelse((p.adjust(x$milind_lofs_wald_ratio_pval) < 0.05 | p.adjust(x$milind_duplications_wald_ratio_pval) < 0.05), "WR pval <0.05 (FDR)",
+                      "NS")), levels = c("Het. Q pval <0.05 (FDR)", "WR pval <0.05 (FDR)", "NS"))
+  
   x |> ggplot(aes(x = milind_lofs_wald_ratio_b, y = milind_duplications_wald_ratio_b)) +
     geom_abline(slope = 1, intercept = 0, colour ="grey30", linewidth = 0.5) +
     geom_vline(xintercept = 0, colour ="grey30", linewidth = 1) + 
     geom_hline(yintercept = 0, colour ="grey30", linewidth = 1) + 
-    geom_point(size = 3, aes(colour = Qpval_adj < 0.05)) +
-    scale_colour_manual(values = c("black","tomato")) +
+    geom_point(aes(colour = col_point, size = col_point)) +
+    scale_colour_manual(values = c("tomato","black","grey"), drop = FALSE) +
+    scale_size_manual(values = c(3,3,2), drop = FALSE) +
     theme_minimal() +
     theme(plot.title = element_text(hjust = 0.5),
           legend.position = "none") +
     labs(x = "Wald Ratio \n(cis-LoF instrumantaion)", 
          y = "Wald Ratio \n(cis-duplication instrumentation)",
-         title = paste("Protein ->", outcome))
+         title = paste("Protein ->\n", outcome))
 })
 
 gridExtra::grid.arrange(grobs = p10, nrow = 14)
 
+## Pull out instances of effect heterogeneity between LoF and duplication instruments
+het_cnv_wrs <- do.call("rbind", lapply(comp_WRs_lofdups[sapply(comp_WRs_lofdups, is.null) == FALSE], function(x){x |> dplyr::filter(Qpval_adj < 0.05)}))
 ```
 
+**Heterogeneity in Wald Ratios**
 
+```{r}
+#| label: compare-walds-hets
+#| fig.width: 15
+#| fig.height: 20
+#| 
+# Plot wald ratios of differing cnv instrumentation strategies
+plot_wald_cnvs <- function(gene, outcome){
+  
+  dat <- res_CNVs_cis[[outcome]] |> 
+    dplyr::filter(exposure == gene)
+  
+  p_theme <- theme_bw() +
+    theme(plot.title = element_text(hjust = 0.5),
+          plot.subtitle = element_text(hjust = 0.5))
+  
+  labs <- c("milind_lofs" = "cis-LoF", "milind_duplications" = "cis-Dup.", "milind_deletions" = "cis-Del.")
+  
+  exp_range <- max(abs(dat$beta.exposure) + 1.96*dat$se.exposure) + 0.1
+  out_range <- max(abs(dat$beta.outcome) + 1.96*dat$se.outcome) + 0.1
+  wr_range <- max(abs(dat$wald_ratio_b) + 1.96*dat$wald_ratio_se) + 0.1
+  
+  # Exposure
+  p_exp <- ggplot(dat, aes(x = beta.exposure, y = labs[test], colour = test)) +
+    geom_vline(xintercept = 0, colour = "grey20", lty = 2) +
+    geom_point(size = 3) +
+    scale_colour_manual(values = cols_cnv, labels = cnv_class, name = "") +
+    scale_x_continuous(limits = c(-exp_range, exp_range)) +
+    geom_errorbarh(aes(xmin = beta.exposure-1.96*se.exposure, xmax = beta.exposure+1.96*se.exposure), height = 0.4) +
+    labs(x = "Bx", y = "") +
+    p_theme +
+    theme(legend.position = "none")
+  
+  # Outcome
+  p_out <- ggplot(dat, aes(x = beta.outcome, y = labs[test], colour = test)) +
+    geom_vline(xintercept = 0, colour = "grey20", lty = 2) +
+    geom_point(size = 3) +
+    scale_colour_manual(values = cols_cnv, labels = cnv_class, name = "") +
+    scale_x_continuous(limits = c(-out_range, out_range)) +
+    geom_errorbarh(aes(xmin = beta.outcome-1.96*se.outcome, xmax = beta.outcome+1.96*se.outcome), height = 0.4) +
+    labs(x = "By", y = "") +
+    p_theme +
+    theme(legend.position = "none")
+  
+  # Wald Ratio
+  p_wald <- ggplot(dat, aes(x = wald_ratio_b, y = labs[test], colour = test)) +
+    geom_vline(xintercept = 0, colour = "grey20", lty = 2) +
+    geom_point(size = 3) +
+    scale_colour_manual(values = cols_cnv, labels = cnv_class, name = "") +
+    scale_x_continuous(limits = c(-wr_range, wr_range)) +
+    geom_errorbarh(aes(xmin = wald_ratio_b-1.96*wald_ratio_se, xmax = wald_ratio_b+1.96*wald_ratio_se), height = 0.4) +
+    labs(x = "Wald Ratio (By/Bx)", y = "", 
+         title = paste("Exposure:", gene, "\nOutcome:", outcome)) +
+    p_theme +
+    theme(legend.position = "none", plot.title = element_text(size = 8))
 
+  return(gridExtra::arrangeGrob(grobs = list(p_wald, p_exp, p_out), nrow = 3, heights = c(0.38,0.31,0.31)))
+}
 
-### Intersting cases:
-
-Rare vs common IV heterogeneity: - CFB_Hb1Ac, MOG_HbA1c, MPO_CorpVol, KLK15_LDL, CD14_SBP, SMPD1_SBP, CDHR5_VitD
-
-Cis vs trans IV heterogeneity: - APOE_LDL, SBSN_VitD, CLSTN3_RBCcount, IGSF9_IGF1
-
-## Next steps
-
--   Look into examples where:
-
-    -   common variants give highly significant causal estimates and rare variants don't and vice versa
-
--   differences between GWAS (regulatory) and WES (coding) common variant IVW estimates
-
--   differences between cis and trans instrumentation
-
--   Some case studies with a more thorough interrogation of where the instruments are sitting and the biology they are instrumenting
-
--   Look at estimates from the gene-based masks
-
--   Pleiotropy:
-
-    -   Compare the pleiotropy profiles of rare and common (and cis and trans) instruments
-
--   Rare regulatory variants (required WGS data)
+gridExtra::grid.arrange(grobs = mapply(plot_wald_cnvs, gene = het_cnv_wrs$exposure, outcome = het_cnv_wrs$outcome, SIMPLIFY = F), nrow = 5)
+```
