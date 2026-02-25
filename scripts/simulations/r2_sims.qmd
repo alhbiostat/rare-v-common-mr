@@ -1,0 +1,226 @@
+---
+title: "LD simulations"
+format: html
+---
+
+```{r}
+#| label: setup
+library(ggplot2)
+library(here)
+```
+
+### Independent variants
+
+Is r2 between two indepoendent variants more variable at the lower end of the allele frequency spectrum, and when the difference in variant frequencies increases by orders of magnitude?
+
+```{r}
+# Simulation fuction
+sim_r2 <- function(sample_size, freq_a, freq_b){
+  snp_a <- rbinom(sample_size, 2, freq_a)
+  snp_b <- rbinom(sample_size, 2, freq_b)
+  
+  r2 <- cor(snp_a, snp_b)^2
+  return(r2)
+}
+
+# Simulate r2 under linkage equilibrium for different MAF variants:
+sample_size = 350000
+n_reps <- 100
+
+freq_values = c(1e-6, 5e-6, 1e-5, 5e-5, 1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 5e-2, 0.1, 0.5)
+
+param_grid = expand.grid(
+  freq_a = freq_values, 
+  freq_b = freq_values,
+  rep = 1:n_reps)
+
+# set.seed(10)
+# param_grid$r2 <- mapply(
+#   sim_r2,
+#   sample_size = sample_size,
+#   freq_a = param_grid$freq_a,
+#   freq_b = param_grid$freq_b
+# )
+
+#param_grid$r2[is.na(param_grid$r2)] <- 0
+#save(param_grid, file = here("scripts/simulations/sim_r2_indep.rda"))
+load(file = here("scripts/simulations/sim_r2_indep.rda"))
+```
+
+```{r}
+# r2 variation when SNPA freq = SNPB freq
+res_maf_matched <- param_grid |> 
+  dplyr::filter(freq_a == freq_b)
+
+res_maf_matched |>
+  dplyr::group_by(freq_a, freq_b) |>
+  dplyr::summarise(mean_r2 = mean(r2), var_r2 = var(r2)^2)
+
+res_maf_matched |>
+  ggplot(aes(x = as.factor(freq_a), y = r2 + 1e-12)) +
+  geom_boxplot() +
+  scale_y_log10() +
+  labs(title = "r2 between independent variants with equivalent MAFs", x = "MAF (SNPA and SNPB)", y = "r2") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# r2 variation vs difference in freq
+res_maf_mismatched <- param_grid |> 
+  dplyr::mutate(fold_diff = apply(param_grid[,1:2], 1, max) / apply(param_grid[,1:2], 1, min))
+
+res_maf_mismatched |>
+  dplyr::group_by(as.factor(fold_diff)) |>
+  dplyr::summarise(mean_r2 = mean(r2), var_r2 = var(r2)^2)
+
+res_maf_mismatched |>
+  ggplot(aes(x = as.factor(fold_diff), y = r2 + 1e-12)) +
+  geom_boxplot() +
+  scale_y_log10() +
+  labs(title = "r2 between independent variants of differing MAFs", x = "Fold difference in MAF", y = "r2") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+### With simulated haplotype structure
+
+To what extend does relatedness in the population (sharing of haplotypes containing rare alleles) skew r2 values?
+
+To create excess co-occurance of rare alleles (an inflated r2):\
+- Simulate a base population with independent haplotypes\
+- A proportion of x individuals belong to related clusters and share haplotypes (IBD) based on degree of relatedness
+
+```{r}
+# Haplotype probabilities
+#pAB  = pA * pB
+#pAb  = pA * (1 - pB)
+#paB  = (1 - pA) * pB
+#pab  = (1 - pA) * (1 - pB)
+
+# N = number of individuals
+# freq_a = MAF for SNP 1
+# freq_b = MAF for SNP 2
+# prop_related = proportion of related individuals
+# degree = degree of relatedness
+
+sim_related_r2 <- function(N, freq_a, freq_b, prop_related, degree) {
+  
+  # Haplotype frequencies (independent baseline)
+  hap_freq <- c(
+    AB = (1 - freq_a) * (1 - freq_b),
+    Ab = (1 - freq_a) * freq_b,
+    aB = freq_a * (1 - freq_b),
+    ab = freq_a * freq_b)
+  
+  # Function to sample one haplotype
+  draw_hap <- function(n){
+    sample(names(hap_freq), n, replace = TRUE, prob = hap_freq)
+  }
+  
+  # Initialize haplotype matrix
+  hap1 <- draw_hap(N)
+  hap2 <- draw_hap(N)
+  
+  # Introduce related pairs
+  n_related <- floor(N * prop_related/2)
+  
+  # Probability of haplotype sharing
+  prob_shared <- c("TRUE" = 0.5/2^(degree-1),
+                  "FALSE" = 1 - 0.5/2^(degree-1))
+  
+  if (n_related > 0) {
+    related_indices <- sample(1:N, 2 * n_related)
+    pairs <- matrix(related_indices, ncol = 2, byrow = TRUE)
+    
+    for (i in 1:n_related) {
+      # Is haplotype shared?:
+      shared <- sample(names(prob_shared), 1, prob = prob_shared)
+      
+      if(shared == TRUE){
+        shared_hap <- draw_hap(1)
+        hap1[pairs[i,1]] <- shared_hap
+        hap1[pairs[i,2]] <- shared_hap
+      }
+    }
+  }
+  
+  minor_alleles <- c("a","b")
+  
+  # Convert haplotypes to genotypes (0/1/2 dosage)
+  geno_from_haps <- function(h1, h2, snp){
+    (substr(h1, snp, snp) == minor_alleles[snp]) +
+      (substr(h2, snp, snp) == minor_alleles[snp])
+  }
+  
+  snp_a <- geno_from_haps(hap1, hap2, 1)
+  snp_b <- geno_from_haps(hap1, hap2, 2)
+  
+  return(cor(snp_a, snp_b)^2)
+}
+
+# Simulate r2 for variants with varying MAFs, incorportating relatedness into the cohort structure:
+sample_size = 100000
+n_reps <- 100
+
+#freq_values = c(1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 0.1)
+freq_values = c(1e-6, 1e-5, 1e-4, 1e-3, 1e-2)
+prop_related = c(0.05, 0.5)
+degree = c(1,2,3)
+
+param_grid2 = expand.grid(
+  freq_a = freq_values, 
+  freq_b = freq_values,
+  prop_related = prop_related,
+  degree = degree,
+  rep = 1:n_reps)
+
+# set.seed(10)
+# param_grid2$r2 <- mapply(
+#   sim_related_r2,
+#   N = sample_size,
+#   freq_a = param_grid2$freq_a,
+#   freq_b = param_grid2$freq_b,
+#   prop_related = param_grid2$prop_related,
+#   degree = param_grid2$degree
+# )
+# 
+# param_grid2$r2[is.na(param_grid2$r2)] <- 0
+#save(param_grid2, file = here("scripts/simulations/sim_r2_hapstructure.rda"))
+load(file = here("scripts/simulations/sim_r2_hapstructure.rda"))
+```
+
+```{r}
+
+# r2 variation when SNPA freq = SNPB freq
+res_maf_matched2 <- param_grid2 |> 
+  dplyr::filter(freq_a == freq_b)
+
+# res_maf_matched2 |>
+#   dplyr::group_by(freq_a, freq_b, prop_related, degree) |>
+#   dplyr::summarise(mean_r2 = mean(r2), var_r2 = var(r2)^2)
+
+res_maf_matched2 |>
+  ggplot(aes(x = as.factor(freq_a), y = r2 + 1e-12), group = as.factor(degree)) +
+  facet_grid(paste("Prop. related =",prop_related) ~ .) +
+  geom_boxplot(aes(colour = as.factor(degree))) +
+  scale_colour_manual(values = c("red","blue","darkgreen"), name = "Degree \n related") +
+  scale_y_log10() +
+  labs(title = "r2 between simulated variants with equivalent MAFs \n across differing cohort relatedness structures (N=100,000)", x = "MAF (SNPA and SNPB)", y = "r2") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# r2 variation vs difference in freq
+res_maf_mismatched2 <- param_grid2 |> 
+  dplyr::mutate(fold_diff = apply(param_grid2[,1:2], 1, max) / apply(param_grid2[,1:2], 1, min))
+
+# res_maf_mismatched2 |>
+#   dplyr::group_by(as.factor(fold_diff)) |>
+#   dplyr::summarise(mean_r2 = mean(r2), var_r2 = var(r2)^2)
+
+res_maf_mismatched2 |>
+  ggplot(aes(x = as.factor(fold_diff), y = r2 + 1e-12), group = as.factor(degree)) +
+  facet_grid(paste("Prop. related =",prop_related) ~ .) +
+  geom_boxplot(aes(colour = as.factor(degree))) +
+  scale_colour_manual(values = c("red","blue","darkgreen"), name = "Degree \n related") +
+  scale_y_log10() +
+  labs(title = "r2 between simulated variants of differing MAFs \n across differing cohort relatedness structures (N=100,000)", x = "Fold difference in MAF", y = "r2") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+```

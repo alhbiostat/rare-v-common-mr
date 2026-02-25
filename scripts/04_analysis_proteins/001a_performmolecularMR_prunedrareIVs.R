@@ -1,20 +1,12 @@
-# Date: 07-08-2025
+# Date: 25-02-2026
 # Author: A.L.Hanson
-# Purpose: Read in harmonised summary statistics for a given outcome (combined across exposures using 005_joinharmonisedstudies.R)
-# perform MR and output results
-# To run: Rscript 001_performmolecularMR.R [HARMONISED OBJECT]
+# Purpose: Modification of 001_performmolecularMR.R to repeat rare-variant MR with LD pruned variants
+# See 02_dataextraction_proteins/001b_prunerareIVs.sh
 
-# Common GWAS IVs (split cis, trans, combined): 
-#1. MR with finemapped hits (accounting for LD)
-#2. MR with clumped and pruned hits
+# To run: Rscript 001a_performmolecularMR_prunerareIVs.R [HARMONISED OBJECT]
 
 # Exome IVs (split cis, trans, combined):
-#1. MR with clumped and pruned common variants
-#2. MR with rare and ultrarare unpruned variants
-#3. MR with rare and ultrarare pruned variants (top hit per gene)
-
-# Exome masks (split cis, trans, combined):
-#1. MR with aggregate IVs: pLOF, missense, pLOF/missense, synonymous
+#1. MR with rare and ultrarare pruned variants (r2>0.1)
 
 library(dotenv)
 library(here)
@@ -24,7 +16,7 @@ library(ggplot2)
 dotenv::load_dot_env(file = here("config.env"))
 data_dir <- file.path(Sys.getenv("data_dir"),"harmonised","proteomics")
 res_dir <- Sys.getenv("results_dir")
-ld_dir <- Sys.getenv("ld_dir")
+ld_dir <- 
 
 args = commandArgs(trailingOnly=TRUE)
 

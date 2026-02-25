@@ -17,7 +17,7 @@
 
 # Steps
 # 1. Extract required variants (pQTLs) and individuals (EUR unrelated; see repo ukbrap-ieu-gwas for QC) from WES PLINK format files
-# 2. Perform variant pruning based on LD (r2 > 0.001)
+# 2. Perform variant pruning based on LD (r2 > 0.1)
 
 # Output:
 # wes_pQTLs_chr${i}.prune.in .prune.out (independent variants to retain)
@@ -26,7 +26,7 @@
 
 source ../../config.env
 
-for i in {21..22}; do
+for i in {1..22}; do
     run_prune="
 
     # Variant IDs
@@ -49,9 +49,9 @@ for i in {21..22}; do
     echo Variants available:
     wc -l tmpset.bim
 
-    # Prune variants (exclude variants within 1MB with r2 > 0.3)
+    # Prune variants (exclude variants within 1MB with r2 > 0.1)
     plink --bfile tmpset \
-    --indep-pairwise 500kb 50 0.3 \
+    --indep-pairwise 500kb 1 0.1 \
     --out wes_pQTLs_chr${i}
 
     # LD matrix
