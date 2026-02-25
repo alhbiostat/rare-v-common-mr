@@ -17,10 +17,21 @@ dat_rare <- lapply(dat, function(x){
   x |> dplyr::filter(EAF <= 0.01 | 1-EAF <= 0.01)
 })
 
+# Filter to ExWAS P<=5e-8
+dat_rare_top <- lapply(dat, function(x){
+  x |> 
+  dplyr::filter(EAF <= 0.01 | 1-EAF <= 0.01) |>
+  dplyr::filter(P <= 5e-8)
+})
+
 # Merge variants, filter to unique and order
 merged <- do.call("rbind", dat_rare) |>
-  dplyr::select("Variant", "CHR", "BP", "GENE") |>
-  dplyr::arrange(CHR, BP) |>
-  unique()
+  dplyr::select("Variant", "CHR", "BP", "EAF", "Situated_gene" = "GENE", "Instrumented_protein" = "protein_target", "cis_trans") |>
+  dplyr::arrange(CHR, BP)
 
-data.table::fwrite(merged, file = file.path(data_dir,"sumstats/proteomics/exome/rareinstruments.tsv"), sep = "\t")
+merged_top <- do.call("rbind", dat_rare_top) |>
+  dplyr::select("Variant", "CHR", "BP", "EAF", "Situated_gene" = "GENE", "Instrumented_protein" = "protein_target", "cis_trans") |>
+  dplyr::arrange(CHR, BP)
+
+data.table::fwrite(merged, file = file.path(data_dir,"sumstats/proteomics/exome/rareinstruments_p1e-4.tsv"), sep = "\t")
+data.table::fwrite(merged_top, file = file.path(data_dir,"sumstats/proteomics/exome/rareinstruments_p5e-8.tsv"), sep = "\t")

@@ -16,7 +16,7 @@ library(ggplot2)
 dotenv::load_dot_env(file = here("config.env"))
 data_dir <- file.path(Sys.getenv("data_dir"),"harmonised","proteomics")
 res_dir <- Sys.getenv("results_dir")
-ld_dir <- 
+pruned_dir <- file.path(Sys.getenv("data_dir"),"sumstats","proteomics","exome","protein_pQTL_pruning")
 
 args = commandArgs(trailingOnly=TRUE)
 
@@ -32,14 +32,40 @@ harmonised_file <- args[1]
 load(file.path(data_dir, harmonised_file)) # harmonised_studies
 message("Number of exposure:outcome pairs: ", length(harmonised_studies))
 
-outcome <- sub(".*_","",sub("harmonised_studies_(.*)\\.rda","\\1",harmonised_file))
-extension <- sub("harmonised_studies_(.*)\\.rda","\\1",harmonised_file)
-results_file <- paste0("results_molecular_MR_", extension, ".rda")
+# Load list of variants to keep (r2 < 0.1)
+prunein_files <- grep("prune.in", list.files(pruned_dir, pattern = "p5e-8_.*", full = TRUE), value = T)
+prunein <- do.call("rbind", lapply(prunein_files, function(x){data.table::fread(x, header = F, data.table = F)}))[,1]
+# Correct variant name formatting
+prunein <- unlist(lapply(strsplit(prunein, ":"), function(x){paste0(x[1],":",x[2],"_",tolower(x[3]),"_",tolower(x[4]))}))
 
-# Perform MR on each exposure-outcome pair, across each of 10 instrument sets (split by cis, trans and combined IVs)
+# Subset to rare and ultrarare variant instrument sets
+harmonised_studies <- lapply(harmonised_studies, function(x){
+  x[c("dhindsa_exwas_variant_rare","dhindsa_exwas_variant_ultrarare")]
+})
+
+# Prune variants from instrument sets
+harmonised_studies_pruned <- lapply(harmonised_studies, function(x){
+  lapply(x, function(y){
+    if(!(is.na(y$SNP[1]))){
+      y |> dplyr::filter(SNP %in% prunein)
+    } else {y}
+  })
+})
+
+outcome <- sub(".*_","",sub("harmonised_studies_(.*)\\.rda","\\1",harmonised_file))
+extension <- sub("harmonised_studies_(.*)_.*\\.rda","\\1",harmonised_file)
+results_file <- paste0("results_molecular_MR_", extension, "_rarepruned_", outcome, ".rda")
+harmonised_file_pruned <- paste0("harmonised_studies_", extension, "_rarepruned_", outcome, ".rda")
+
+# Write out pruned IVs
+if(!(file.exists(file.path(data_dir, harmonised_file_pruned)))){
+  save(harmonised_studies_pruned, file = file.path(data_dir, harmonised_file_pruned))
+}
+
+# Perform MR on each exposure-outcome pair, across each rare/ultrare instrument set (split by cis, trans and combined IVs)
 
 # Analyse each (new) study pair
-for(i in 1:length(harmonised_studies)){
+for(i in 1:length(harmonised_studies_pruned)){
 
   # Check if MR results already exist
   if(file.exists(file.path(res_dir, results_file))){
@@ -49,14 +75,14 @@ for(i in 1:length(harmonised_studies)){
     # If new study pairs exist that are not in results:
     study_pairs <- names(results_MR_old)
     # New study pairs
-    study_pairs <- names(harmonised_studies)[!(names(harmonised_studies) %in% study_pairs)]
+    study_pairs <- names(harmonised_studies_pruned)[!(names(harmonised_studies_pruned) %in% study_pairs)]
 
     if(length(study_pairs) == 0){
       message("No new study pairs to analyse")
       break()
     }else{
       message("Pairs remaining: ", length(study_pairs))
-      harmonised_studies <- harmonised_studies[study_pairs]
+      harmonised_studies_pruned <- harmonised_studies_pruned[study_pairs]
       i <- 1
       results_MR <- list()
     }
@@ -66,8 +92,9 @@ for(i in 1:length(harmonised_studies)){
 
   res_list <- list()
   
-  for(j in 1:length(harmonised_studies[[i]])){
-    dat <- harmonised_studies[[i]][j]
+  for(j in 1:length(harmonised_studies_pruned[[i]])){
+    
+    dat <- harmonised_studies_pruned[[i]][j]
     
     message("Performing MR for ", names(harmonised_studies)[i],": ", names(harmonised_studies[[i]])[j])
     
@@ -83,100 +110,25 @@ for(i in 1:length(harmonised_studies)){
         dat_split <- split(dat1, dat1$cis_trans)
       }
   
-      # Perform LD aware MR for common GWAS finemapped IV sets
-      if(names(dat) == "sun_gwas_variant_common_finemapped"){
-        # Perform MR with correlated instruments using MendelianRandomisation::mr_ivw()
-        res_split <- lapply(dat_split, function(x){
-          
-          # Exclude palindromic ambiguous SNPs
-          x <- x |> dplyr::filter(mr_keep == TRUE)
+      # Perform standard TwoSampleMR::mr()
+      res_split <- lapply(dat_split, function(x){
 
-          skip_split <- (all(is.na(x$mr_keep)) | all(x$mr_keep == FALSE))
-          if(skip_split == TRUE){
-            res <- data.frame(
-              id.exposure = NA, id.outcome = NA, outcome = NA, exposure = NA, method = NA, nsnp = NA,
-              b = NA, se = NA, pval = NA, pair = names(harmonised_studies)[i], cis_trans = NA, IV_set = names(dat))
-            return(res)
-          }
-
-          snplist <- x$SNP
-          cis_trans <- unique(x$cis_trans)
-          
-          # Generate LD matrix for SNPs (alleles should be correctly oriented as using alphatised GPMAP data)
-          ld_mat <- try(ieugwasr::ld_matrix(
-            snplist,
-            plink_bin = genetics.binaRies::get_plink_binary(),
-            bfile = file.path(ld_dir, "full_rsid"),
-            with_alleles = FALSE
-          ))
-
-          if(class(ld_mat) == "try-error" & length(snplist) == 1){
-            # If no instruments found in the ld reference and only a single instrument
-            ld_mat <- matrix(data = 1, dimnames = list("snp_1","snp_1"))
-          }else if(nrow(ld_mat) == 1){
-            # If only one instrument found in the ld refernce
-            snplist <- snplist[snplist %in% colnames(ld_mat)]
-            x <- x |> dplyr::filter(SNP %in% snplist)
-            rownames(ld_mat) <- paste("snp",1:nrow(ld_mat),sep = "_")
-            colnames(ld_mat) <- rownames(ld_mat)
-          }else{
-            # Remove any SNPs not in ld matrix
-            snplist <- snplist[snplist %in% colnames(ld_mat)]
-            x <- x |> dplyr::filter(SNP %in% snplist)
-            # Reorder ld matrix to match exposure data
-            ld_mat <- ld_mat[snplist, snplist]
-            rownames(ld_mat) <- paste("snp",1:nrow(ld_mat),sep = "_")
-            colnames(ld_mat) <- rownames(ld_mat)
-          }
-
-          # Convert to MendelianRandomization package input with correlations
-          dat2 <- MendelianRandomization::mr_input(
-            bx = x$beta.exposure,
-            bxse = x$se.exposure,
-            by = x$beta.outcome,
-            byse = x$se.outcome,
-            corr=ld_mat)
-
-          res <- MendelianRandomization::mr_ivw(object = dat2, correl = TRUE)
-          # Reformat results to match TwoSampleMR::mr()
+        skip_split <- (all(is.na(x$mr_keep)) | all(x$mr_keep == FALSE))
+        if(skip_split == TRUE){
           res <- data.frame(
-            id.exposure = unique(x$id.exposure),
-            id.outcome = unique(x$id.outcome),
-            outcome = unique(x$outcome),
-            exposure = unique(x$exposure),
-            method = ifelse(length(snplist) == 1,"Wald ratio", "Inverse variance weighted"),
-            nsnp = res@SNPs,
-            b = res@Estimate,
-            se = res@StdError,
-            pval = res@Pvalue,
-            pair = names(harmonised_studies)[i],
-            cis_trans = paste(cis_trans[order(cis_trans)],collapse = "_"),
-            IV_set = names(dat))
-          
+            id.exposure = NA, id.outcome = NA, outcome = NA, exposure = NA, method = NA, nsnp = NA,
+            b = NA, se = NA, pval = NA, pair = names(harmonised_studies_pruned)[i], cis_trans = NA, IV_set = names(dat))
           return(res)
-        })
-      } else {
-        # For all other instrument sets use standard TwoSampleMR::mr()
-        res_split <- lapply(dat_split, function(x){
-
-          skip_split <- (all(is.na(x$mr_keep)) | all(x$mr_keep == FALSE))
-          if(skip_split == TRUE){
-            res <- data.frame(
-              id.exposure = NA, id.outcome = NA, outcome = NA, exposure = NA, method = NA, nsnp = NA,
-              b = NA, se = NA, pval = NA, pair = names(harmonised_studies)[i], cis_trans = NA, IV_set = names(dat))
-            return(res)
-          }
-
-          cis_trans <- unique(x$cis_trans)
-          res <- TwoSampleMR::mr(x)
-          res$pair <- names(harmonised_studies)[i]
-          cis_tans <- unique(x$cis_trans)
-          res$cis_trans <- paste(cis_trans[order(cis_trans)],collapse = "_")
-          res$IV_set <- names(dat)
-          return(res)
-        })
-      }
+        }
+        cis_trans <- unique(x$cis_trans)
+        res <- TwoSampleMR::mr(x)
+        res$pair <- names(harmonised_studies_pruned)[i]
+        res$cis_trans <- paste(cis_trans[order(cis_trans)],collapse = "_")
+        res$IV_set <- names(dat)
+        return(res)
+      })
       res <- unique(do.call("rbind", res_split))
+    
     } else {
       res <- data.frame(
               id.exposure = NA, id.outcome = NA, outcome = NA, exposure = NA, method = NA, nsnp = NA,
@@ -184,10 +136,11 @@ for(i in 1:length(harmonised_studies)){
     }
     res_list <- c(res_list, list(res))
   }
+
   res_join <- do.call("rbind", res_list)
   rownames(res_join) <- NULL
   res_join <- list(res_join)
-  names(res_join) <- names(harmonised_studies[i])
+  names(res_join) <- names(harmonised_studies_pruned[i])
 
   results_MR <- c(results_MR, res_join)
 
@@ -207,19 +160,3 @@ for(i in 1:length(harmonised_studies)){
     save(results_MR, file = file.path(res_dir, results_file))
   }
 }
-
-#names(results_MR) <- names(harmonised_studies)
-
-# ## Append new results to existing results_MR object
-# if(exists("results_MR_old")){
-#   results_MR <- c(results_MR_old, results_MR)
-#   # Reorder studies
-#   order_studies <- names(results_MR)[order(names(results_MR))]
-#   results_MR <- results_MR[order_studies]
-  
-#   ## Write out results_MR object
-#   save(results_MR, file = file.path(res_dir, results_file))
-# }else{
-#   ## Write out harmonised_study object
-#   save(results_MR, file = file.path(res_dir, results_file))
-# }

@@ -30,7 +30,7 @@ for i in {1..22}; do
     run_prune="
 
     # Variant IDs
-    awk -F'\t' 'NR>1 && \$2==${i} {print \$1}' rareinstruments.tsv > varset.txt
+    awk -F'\t' 'NR>1 && \$2==${i} {print \$1}' rareinstruments_p5e-8.tsv | sort | uniq > varset.txt
     sed -i 's/-/:/g' varset.txt
 
     # Copy plink files
@@ -52,12 +52,12 @@ for i in {1..22}; do
     # Prune variants (exclude variants within 1MB with r2 > 0.1)
     plink --bfile tmpset \
     --indep-pairwise 500kb 1 0.1 \
-    --out wes_pQTLs_chr${i}
+    --out wes_pQTLs_p5e-8_chr${i}
 
     # LD matrix
-    plink2 --bfile tmpset \
-    --r2-unphased square \
-    --out wes_pQTLs_chr${i}_ldmx
+    #plink2 --bfile tmpset \
+    #--r2-unphased square \
+    #--out wes_pQTLs_chr${i}_ldmx
 
     rm ukb23158_c${i}_b0_v1.* 
     rm tmpset.*
@@ -66,10 +66,10 @@ for i in {1..22}; do
 
     dx run swiss-army-knife \
     -iin="${rap_data_dir}/ukb_unrel_whitebritish_QCed.txt" \
-    -iin="${rap_data_dir}/WES/pqtls/rareinstruments.tsv" \
+    -iin="${rap_data_dir}/WES/pqtls/rareinstruments_p5e-8.tsv" \
     -icmd="${run_prune}" \
     --tag="prune rare pqtls chr${i}" \
-    --instance-type="mem2_ssd2_v2_x8" \
+    --instance-type="mem2_ssd2_v2_x4" \
 	  --destination="${rap_proj}:${rap_data_dir}/WES/pqtls/" \
 	  --brief --yes
 done
