@@ -33,7 +33,8 @@ load(file.path(data_dir, harmonised_file)) # harmonised_studies
 message("Number of exposure:outcome pairs: ", length(harmonised_studies))
 
 # Load list of variants to keep (r2 < 0.1)
-prunein_files <- grep("prune.in", list.files(pruned_dir, pattern = "p5e-8_.*", full = TRUE), value = T)
+# prunein_files <- grep("prune.in", list.files(pruned_dir, pattern = "p5e-8_.*", full = TRUE), value = T)
+prunein_files <- grep("pQTLs_chr[0-9].*\\.prune\\.in", list.files(pruned_dir, full = TRUE), value = T)
 prunein <- do.call("rbind", lapply(prunein_files, function(x){data.table::fread(x, header = F, data.table = F)}))[,1]
 # Correct variant name formatting
 prunein <- unlist(lapply(strsplit(prunein, ":"), function(x){paste0(x[1],":",x[2],"_",tolower(x[3]),"_",tolower(x[4]))}))
@@ -53,9 +54,9 @@ harmonised_studies_pruned <- lapply(harmonised_studies, function(x){
 })
 
 outcome <- sub(".*_","",sub("harmonised_studies_(.*)\\.rda","\\1",harmonised_file))
-extension <- sub("harmonised_studies_(.*)_.*\\.rda","\\1",harmonised_file)
-results_file <- paste0("results_molecular_MR_", extension, "_rarepruned_", outcome, ".rda")
-harmonised_file_pruned <- paste0("harmonised_studies_", extension, "_rarepruned_", outcome, ".rda")
+#extension <- sub("harmonised_studies_(.*)_.*\\.rda","\\1",harmonised_file)
+results_file <- paste0("results_molecular_MR", "_rarepruned_", outcome, ".rda")
+harmonised_file_pruned <- paste0("harmonised_studies", "_rarepruned_", outcome, ".rda")
 
 # Write out pruned IVs
 if(!(file.exists(file.path(data_dir, harmonised_file_pruned)))){
