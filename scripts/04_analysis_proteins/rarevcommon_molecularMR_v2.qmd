@@ -80,7 +80,9 @@ files_snps <- list.files(file.path(data_dir, "harmonised"), pattern = "harmonise
 
 # Repeat with rare variant LD pruning (rare IVs P<5e-8, common IVs P<5e-8)
 files_pruned <- list.files(res_dir, pattern = "results_molecular_MR_GW5e-08_EW5e-08_rarepruned", full.names = T)
+files_pruned <- files_pruned[-grep("COMBINED", files_pruned)]
 files_snps_pruned <- list.files(file.path(data_dir, "harmonised"), pattern = "harmonised_studies_GW5e-08_EW5e-08_rarepruned", full.names = T)
+files_snps_pruned <- files_snps_pruned[-grep("COMBINED", files_snps_pruned)]
 
 res_MR <- list()
 for(i in 1:length(files)){
@@ -124,10 +126,6 @@ rm(results_MR)
 rm(res_MR_relaxed_pruned)
 res_MR <- res_MR_joined
 rm(res_MR_joined)
-
-# Save
-#save(res_MR, file = file.path(res_dir, "results_molecular_MR_GW5e-08_EW5e-08_rarepruned_COMBINED.rda"))
-#save(res_MR_relaxed, file = file.path(res_dir, "results_molecular_MR_GW5e-08_EW1e-04_rarepruned_COMBINED.rda"))
 
 # ========== Import harmonised SNP data ========= #
 harmonised_snps <- list()
@@ -188,8 +186,8 @@ prunein_relaxed <- unlist(lapply(strsplit(prunein_relaxed, ":"), function(x){pas
 
 ## Retain the following instrument sets for final analysis:
 IVsets <- c("dhindsa_exwas_mask_ptv" = "mask:pLOF",
-            "dhindsa_exwas_mask_raredmg" = "mask:missense",
-            "dhindsa_exwas_mask_ptvraredmg" = "mask:pLOF|missense",
+            "dhindsa_exwas_mask_raredmg" = "mask:miss",
+            "dhindsa_exwas_mask_ptvraredmg" = "mask:pLOF|miss",
             "dhindsa_exwas_mask_syn" = "mask:synonymous",
             "dhindsa_exwas_variant_ultrarare_pruned" = "exome:ultrarare",
             "dhindsa_exwas_variant_rare_pruned" = "exome:rare",
@@ -202,13 +200,20 @@ variant_IVsets <- c("dhindsa_exwas_variant_ultrarare_pruned" = "exome:ultrarare"
                     "sun_gwas_variant_common_clumped" = "genome:common")
 
 unpruned_IVsets <- c("dhindsa_exwas_mask_ptv" = "mask:pLOF",
-                    "dhindsa_exwas_mask_raredmg" = "mask:missense",
-                    "dhindsa_exwas_mask_ptvraredmg" = "mask:pLOF|missense",
+                    "dhindsa_exwas_mask_raredmg" = "mask:miss",
+                    "dhindsa_exwas_mask_ptvraredmg" = "mask:pLOF|miss",
                     "dhindsa_exwas_mask_syn" = "mask:synonymous",
                     "dhindsa_exwas_variant_ultrarare" = "exome:ultrarare",
                     "dhindsa_exwas_variant_rare" = "exome:rare",
                     "dhindsa_exwas_variant_common" = "exome:common",
                     "sun_gwas_variant_common_clumped" = "genome:common")
+
+# Varaint and gene mask comparison for manuscript
+paper_IVsets <- c("dhindsa_exwas_mask_ptvraredmg" = "mask:pLOF|miss",
+                  "dhindsa_exwas_variant_ultrarare_pruned" = "exome:ultrarare",
+                  "dhindsa_exwas_variant_rare_pruned" = "exome:rare",
+                  "dhindsa_exwas_variant_common" = "exome:common",
+                  "sun_gwas_variant_common_clumped" = "genome:common")
 
 IV_sets <- names(IVsets)
 
@@ -226,6 +231,13 @@ res_MR_relaxed <- lapply(res_MR_relaxed, function(x){
 
 harmonised_snps <- lapply(harmonised_snps, function(x){lapply(x, function(y){y[names(IVsets)]})})
 harmonised_snps_relaxed <- lapply(harmonised_snps_relaxed, function(x){lapply(x, function(y){y[names(IVsets)]})})
+
+# Save
+#save(res_MR, file = file.path(res_dir, "results_molecular_MR_GW5e-08_EW5e-08_rarepruned_COMBINED.rda"))
+#save(res_MR_relaxed, file = file.path(res_dir, "results_molecular_MR_GW5e-08_EW1e-04_rarepruned_COMBINED.rda"))
+#save(harmonised_snps, file = file.path(data_dir, "harmonised/harmonised_studies_GW5e-08_EW5e-08_rarepruned_COMBINED.rda"))
+#save(harmonised_snps_relaxed, file = file.path(data_dir, "harmonised/harmonised_studies_GW5e-08_EW1e-04_rarepruned_COMBINED.rda"))
+
 # --------------------------------------------------------------------------------------- #
 # Variables and aesthetics
 
@@ -273,26 +285,29 @@ Rare and common variant instruments (pQTLs) have been partitioned according to t
 #| fig.height: 6.5
 
 # Number of instruments per protein for each IV set
-num_IVs <- lapply(res_MR, function(x){
-  df_out <- data.frame(expand.grid(IV_set = IV_sets, cis_trans = c("cis","trans")))
-  
-  for(i in 1:length(x)){
-    df <- x[[i]] |> dplyr::summarise(unique(nsnp), .by = c(IV_set, cis_trans))
-    colnames(df)[3] <- names(x[i])
-    df_out <- left_join(df_out, df, by = c("IV_set","cis_trans"))
-  }
-  
-  df_out <- df_out |> tidyr::pivot_longer(cols = 3:length(df_out)) |> na.exclude()
-  return(df_out)
-})
+# num_IVs <- lapply(res_MR, function(x){
+#   df_out <- data.frame(expand.grid(IV_set = IV_sets, cis_trans = c("cis","trans")))
+#   
+#   for(i in 1:length(x)){
+#     df <- x[[i]] |> dplyr::summarise(unique(nsnp), .by = c(IV_set, cis_trans))
+#     colnames(df)[3] <- names(x[i])
+#     df_out <- left_join(df_out, df, by = c("IV_set","cis_trans"))
+#   }
+#   
+#   df_out <- df_out |> tidyr::pivot_longer(cols = 3:length(df_out)) |> na.exclude()
+#   return(df_out)
+# })
+# 
+# num_IVs <- do.call("rbind", num_IVs) |> dplyr::mutate(outcome = sub(".*_","",name))
 
-num_IVs <- do.call("rbind", num_IVs) |> dplyr::mutate(outcome = sub(".*_","",name))
+#write.table(num_IVs, file = file.path(res_dir, "numIVs_GW5e-08_EW5e-08_rarepruned.txt"), row.names = F, col.names = T, quote = F)
+num_IVs <- data.table::fread(file.path(res_dir, "numIVs_GW5e-08_EW5e-08_rarepruned.txt"))
 
 # Plot
 p1 <- mapply(FUN = function(x,y){
   x <- x |> dplyr::filter(cis_trans == y) |>
     dplyr::mutate(label = factor(IVsets[IV_set], levels = IVsets)) |>
-    dplyr::filter(label %in% grep("exome|genome", IVsets, value = T))
+    dplyr::filter(label %in% variant_IVsets)
   
   ggplot(x, aes(x = label, y = value, fill = label)) +
     facet_grid(.~outcome) +
@@ -322,26 +337,29 @@ A GWS theshold for significance is strict for rare variants, which must exhibit 
 #| fig.height: 7
 
 # Number of instruments per protein for each IV set
-num_IVs_relaxed <- lapply(res_MR_relaxed, function(x){
-  df_out <- data.frame(expand.grid(IV_set = IV_sets, cis_trans = c("cis","trans")))
-  
-  for(i in 1:length(x)){
-    df <- x[[i]] |> dplyr::summarise(unique(nsnp), .by = c(IV_set, cis_trans))
-    colnames(df)[3] <- names(x[i])
-    df_out <- left_join(df_out, df, by = c("IV_set","cis_trans"))
-  }
-  
-  df_out <- df_out |> tidyr::pivot_longer(cols = 3:length(df_out)) |> na.exclude()
-  return(df_out)
-})
+# num_IVs_relaxed <- lapply(res_MR_relaxed, function(x){
+#   df_out <- data.frame(expand.grid(IV_set = IV_sets, cis_trans = c("cis","trans")))
+#   
+#   for(i in 1:length(x)){
+#     df <- x[[i]] |> dplyr::summarise(unique(nsnp), .by = c(IV_set, cis_trans))
+#     colnames(df)[3] <- names(x[i])
+#     df_out <- left_join(df_out, df, by = c("IV_set","cis_trans"))
+#   }
+#   
+#   df_out <- df_out |> tidyr::pivot_longer(cols = 3:length(df_out)) |> na.exclude()
+#   return(df_out)
+# })
+# 
+# num_IVs_relaxed <- do.call("rbind", num_IVs_relaxed) |> dplyr::mutate(outcome = sub(".*_","",name))
 
-num_IVs_relaxed <- do.call("rbind", num_IVs_relaxed) |> dplyr::mutate(outcome = sub(".*_","",name))
+#write.table(num_IVs_relaxed, file = file.path(res_dir, "numIVs_GW5e-08_EW1e-04_rarepruned.txt"), row.names = F, col.names = T, quote = F)
+num_IVs_relaxed <- data.table::fread(file.path(res_dir, "numIVs_GW5e-08_EW1e-04_rarepruned.txt"))
 
 # Plot
 p1.2 <- mapply(FUN = function(x,y){
   x <- x |> dplyr::filter(cis_trans == y) |>
     dplyr::mutate(label = factor(IVsets[IV_set], levels = IVsets)) |>
-    dplyr::filter(label %in% grep("exome|genome", IVsets, value = T))
+    dplyr::filter(label %in% variant_IVsets)
   
   ggplot(x, aes(x = label, y = value, fill = label)) +
     facet_grid(.~outcome) +
@@ -450,6 +468,7 @@ p2.2 <- sapply(c("cis","trans"), function(x){
          title = paste0("Percentage of plasma proteins with ",x, "-IV sets available (with n>=1 or >=3 instruments) \n(common p<5e-8; rare p<1e-4)"))}, simplify = FALSE)
   
 gridExtra::grid.arrange(grobs = p2.2)
+
 ```
 
 **Instrument overlap**
@@ -458,20 +477,26 @@ What is the overlap in the proteins that have at least 1 IV across instrument se
 
 ```{r}
 #| label: instrument overlap
-#| fig.width: 8
+#| fig.width: 6
 #| fig.height: 3
 
 num_IVs$protein <- sub("_.*","",num_IVs$name)
 
 upset_cis <- list(
-  "exome:ultrarare" = num_IVs |> dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_variant_ultrarare_pruned" & cis_trans == "cis") |> dplyr::pull(protein),
-  "exome:rare" = num_IVs |> dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_variant_rare_pruned" & cis_trans == "cis") |> dplyr::pull(protein),
-  "genome:common" = num_IVs |> dplyr::filter(outcome == "BMI" & IV_set == "sun_gwas_variant_common_clumped" & cis_trans == "cis") |> dplyr::pull(protein))
+  "exome:rare" = num_IVs |> 
+    dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_variant_rare_pruned" & cis_trans == "cis") |> 
+    dplyr::pull(protein),
+  "ex/genome:common" = num_IVs |> 
+    dplyr::filter(outcome == "BMI" & IV_set %in% c("dhindsa_exwas_variant_common", "sun_gwas_variant_common_clumped") & cis_trans == "cis") |>
+    dplyr::pull(protein) |> unique())
 
 upset_trans <- list(
-  "exome:ultrarare" = num_IVs |> dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_variant_ultrarare_pruned" & cis_trans == "trans") |> dplyr::pull(protein),
-  "exome:rare" = num_IVs |> dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_variant_rare_pruned" & cis_trans == "trans") |> dplyr::pull(protein),
-  "genome:common" = num_IVs |> dplyr::filter(outcome == "BMI" & IV_set == "sun_gwas_variant_common_clumped" & cis_trans == "trans") |> dplyr::pull(protein))
+  "exome:rare" = num_IVs |> 
+    dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_variant_rare_pruned" & cis_trans == "trans") |> 
+    dplyr::pull(protein),
+  "ex/genome:common" = num_IVs |> 
+    dplyr::filter(outcome == "BMI" & IV_set %in% c("dhindsa_exwas_variant_common", "sun_gwas_variant_common_clumped") & cis_trans == "trans") |>
+    dplyr::pull(protein) |> unique())
 
 # Upset plots
 upset(fromList(upset_cis), order.by = "freq", text.scale = 1.5, mainbar.y.label = "cis-instrumented \nproteins (P<5e-8)")
@@ -480,14 +505,20 @@ upset(fromList(upset_trans), order.by = "freq", text.scale = 1.5, mainbar.y.labe
 num_IVs_relaxed$protein <- sub("_.*","",num_IVs_relaxed$name)
 
 upset_cis_relaxed <- list(
-  "exome:ultrarare" = num_IVs_relaxed |> dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_variant_ultrarare_pruned" & cis_trans == "cis") |> dplyr::pull(protein),
-  "exome:rare" = num_IVs_relaxed |> dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_variant_rare_pruned" & cis_trans == "cis") |> dplyr::pull(protein),
-  "genome:common" = num_IVs_relaxed |> dplyr::filter(outcome == "BMI" & IV_set == "sun_gwas_variant_common_clumped" & cis_trans == "cis") |> dplyr::pull(protein))
+  "exome:rare" = num_IVs_relaxed |> 
+    dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_variant_rare_pruned" & cis_trans == "cis") |> 
+    dplyr::pull(protein),
+  "ex/genome:common" = num_IVs_relaxed |> 
+    dplyr::filter(outcome == "BMI" & IV_set %in% c("dhindsa_exwas_variant_common", "sun_gwas_variant_common_clumped") & cis_trans == "cis") |>
+    dplyr::pull(protein) |> unique())
 
 upset_trans_relaxed <- list(
-  "exome:ultrarare" = num_IVs_relaxed |> dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_variant_ultrarare_pruned" & cis_trans == "trans") |> dplyr::pull(protein),
-  "exome:rare" = num_IVs_relaxed |> dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_variant_rare_pruned" & cis_trans == "trans") |> dplyr::pull(protein),
-  "genome:common" = num_IVs_relaxed |> dplyr::filter(outcome == "BMI" & IV_set == "sun_gwas_variant_common_clumped" & cis_trans == "trans") |> dplyr::pull(protein))
+  "exome:rare" = num_IVs_relaxed |> 
+    dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_variant_rare_pruned" & cis_trans == "trans") |> 
+    dplyr::pull(protein),
+  "ex/genome:common" = num_IVs_relaxed |> 
+    dplyr::filter(outcome == "BMI" & IV_set %in% c("dhindsa_exwas_variant_common", "sun_gwas_variant_common_clumped") & cis_trans == "trans") |>
+    dplyr::pull(protein) |> unique())
 
 # Upset plots
 upset(fromList(upset_cis_relaxed), order.by = "freq", text.scale = 1.5, mainbar.y.label = "cis-instrumented \n proteins \n P<5e-8 common \n P<1e-4 rare")
@@ -643,7 +674,7 @@ What is the cis effect of trans variants on the genes that they are situated in 
 
 On average, how many molecular traits (protein levels) does a variant significantly associate with across instrument sets (e.g. ultra-rare, rare, common)?
 
-To assess the pleiotropy profiles of variants in each IV set, all significant pQTL associations reported with a given variant (p\<=5e-8) were extracted from the O-link protein GWAS/ExWAS summary statistics.
+To assess the pleiotropy profiles of variants in each IV set, all significant pQTL associations reported with a given variant (p\<=5e-8; or p<=1e-4 for rare varaints at a relaxed threshod) were extracted from the O-link protein GWAS/ExWAS summary statistics.
 
 ```{r}
 #| label: pleiotropy-matrix
@@ -674,12 +705,15 @@ lookup_pQTLs <- lapply(lookup_pQTLs, function(x){
   
   return(out)})
 
+# Retain LD pruned common variants
+#### [FIX]
+
 # Relaxed theshold for rare variants (P<1e-4)
 lookup_pQTLs_relaxed <- lapply(lookup_pQTLs, function(x){
   x |> dplyr::filter(!(cis_trans == "")) # Exclude composite protein targets with no cis_trans assignment
 })
 
-# Prune rare variants
+# Retain LD pruned rare variants
 lookup_pQTLs_relaxed$dhindsa_exwas_variant_rare_pruned <- lookup_pQTLs_relaxed$dhindsa_exwas_variant_rare |> 
   dplyr::filter(variant %in% gsub("_","-",sub(":","-",toupper(prunein_relaxed))))
 lookup_pQTLs_relaxed$dhindsa_exwas_variant_ultrarare_pruned <- lookup_pQTLs_relaxed$dhindsa_exwas_variant_ultrarare |> 
@@ -911,7 +945,6 @@ Are the higher numbers of cis-gene and trans-gene (within the same chromosome) a
 #| cache: TRUE
 
 # Annotate WES pQTLs (common IVs P<5e-8, rare IVs P<1e-4) with numbe.r of genes in proximity
-
 count_genes_1mb <- function(geneinfo, variant_ids){
   out <- data.frame(variant = variant_ids,
                     chr = as.numeric(sub("-.*","",variant_ids)),
@@ -1056,17 +1089,240 @@ shared_transsignals$prop_shared = shared_transsignals$n_trans_shared/shared_tran
 # shared_transsignals |> dplyr::filter(n_trans_total != 0) |>
 #   ggplot(aes(x = n_codinggenes_1mb, y = prop_shared)) +
 #   geom_point()
+
+
 ```
 
 ### IV heterogenity
 
 Heterogenity in SNP effects can be a result of variants acting within differing biological pathways to infuence an outcome (pleiotropy), and violates the third IV assumption (an instrument only influences an outcome via its effect on an exposure). Do rare and common, cis and trans IVs exhibit differing heterogenity in causal effect estimates? When rare and common instruments are combined into one MR analysis, is there a relationship between exposure effect and SNP heterogenity (definied as the deviation between the wald ratio for an IV and the IVW estimated from the metanalysis of all IVs)?...
 
+```{r}
+#| label: IV-heterogenity
+#| fig.height: 3.5
+#| fig.width: 6
 
+# Read in results of mr_heterogenity() for common and rare variant IV sets
+files_het <- list.files(res_dir, pattern = "heterogenity", full.names = T)
+het <- do.call("rbind", lapply(files_het, function(x){data.table::fread(x)}))
 
+het |> 
+  dplyr::filter(method == "Inverse variance weighted" &
+                  n_snps > 5) |>
+  dplyr::mutate(IV_set = factor(IVsets[variant_set], levels = IVsets)) |>
+  ggplot(aes(x = variant_type, y = -log10(Q_pval))) +
+  facet_grid(. ~ IV_set) +
+  geom_boxplot(aes(fill = IV_set)) +
+  scale_fill_manual(values = cols_IVsets) +
+  scale_y_log10() +
+  theme_minimal() +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) + 
+  labs(x = "", y = "-log10(Q p-value)", title = "Heterogenity in causal estimates (proteins with >5 IVs)")
 
+# Restrict to the same proteins across instrument sets (sensitivity analysis)
+```
 
 ## Causal effect estimates
+
+### Comparison of causal effects
+
+**Significant causal effects detected across instrument types**
+
+```{r}
+#| label: full-results
+#| fig.width: 18
+#| fig.height: 33
+#| cache: TRUE
+
+# P-value threshold for cis-MR (multiple testing correction for proteins instrumentable with at least 3 IVs in cis)
+alpha_cis3 <- 0.05/max(avail_IVs_relaxed |> dplyr::filter(cis_trans == "cis") |> pull(n_prots_3IV)) # 5x10^-5
+
+# Plot "manhattan" for protein causal effects on a given outcome, restricting to IV sets of at least 3 variants (masks can have 1)
+plot_fullresults <- function(results_MR, outcome, nsnps = 3, cistrans = "cis"){
+  df <- do.call("rbind", lapply(results_MR[[outcome]], function(x){
+    dat <- x |> 
+      dplyr::filter(method %in% c("Wald ratio", "Inverse variance weighted"),
+                    cis_trans == cistrans,
+                    (IV_set %in% names(variant_IVsets) & nsnp >= nsnps) | !(IV_set %in% names(variant_IVsets)),
+                    IV_set %in% names(paper_IVsets))
+  }))
+  # Format for plotting
+  df <- df |>
+    dplyr::arrange(pval) |>
+    dplyr::mutate(
+      set = IVsets[IV_set],
+      col = factor(ifelse(pval <= 0.05, set, NA), levels = IVsets),
+      label = ifelse(pval <= alpha, exposure, NA))
+    #dplyr::mutate(label = ifelse(duplicated(label), NA, label))
+  
+  df |> dplyr::arrange(desc(pval)) |>
+    ggplot(aes(x = exposure, y = -log10(pval))) +
+    geom_hline(yintercept = -log10(alpha_cis3), col = "grey50", lty = 2) +
+    geom_point(aes(colour = col), size = 2.5) +
+    ggrepel::geom_text_repel(aes(label = label)) +
+    scale_colour_manual(name = "", values = cols_IVsets, na.value = "grey90") +
+    theme_minimal() +
+    theme(legend.position = "bottom",
+          axis.text.x = element_blank(),
+          axis.text.y = element_text(size = 10),
+          axis.title = element_text(size = 12),
+          panel.grid = element_blank(),
+          plot.title = element_text(hjust = 0.5, size = 14),
+          legend.text = element_text(size = 12)) +
+    guides(colour = guide_legend(nrow = 1)) +
+    labs(x = "Protein exposure", y = "IVW/WR -log10(P)", title = outcome)
+}
+
+gridExtra::grid.arrange(grobs = 
+  lapply(X = names(res_MR_relaxed), FUN = plot_fullresults, results_MR = res_MR_relaxed, nsnps = 3, cistrans = "cis"), nrow = 11)
+
+
+```
+
+How many new highly significant causal associations are detected with rare variants or gene based masks that a. cannot be instrumented in cis with common variants or b. show no causal effect when using common-IVs (suggesting rare variants perturb the gene in a more relevant fashion)?:
+
+```{r}
+#| label: new-causal-effects
+#| cache: TRUE
+#| include: FALSE
+
+# Pull significant MR results (at p<0.05 for comparison of cis IV sets)
+# >=3 IVs for variant-based instruments, 1 sufficient for masks
+
+sig_MR_relaxed <- lapply(res_MR_relaxed, function(x){
+  do.call("rbind", lapply(x, function(y){
+    dat <- y |> 
+      dplyr::filter(method %in% c("Wald ratio", "Inverse variance weighted"),
+                    cis_trans == "cis",
+                    (IV_set %in% names(variant_IVsets) & nsnp >= 3) | !(IV_set %in% names(variant_IVsets)),
+                    IV_set %in% names(paper_IVsets),
+                    pval <= alpha_cis3)})) |> # multiple testing correction
+    dplyr::mutate(IVset = IVsets[IV_set])})
+
+# All common IV results
+res_MR_common <- lapply(res_MR_relaxed, function(x){
+  do.call("rbind",lapply(x, function(y){
+    dat <- y |> 
+      dplyr::filter(method == "Inverse variance weighted",
+                    cis_trans == "cis",
+                    nsnp >= 3,
+                    IV_set %in% c("dhindsa_exwas_variant_common","sun_gwas_variant_common_clumped")) |>
+      dplyr::mutate(IVset = IVsets[IV_set])}))})
+
+# Upset plot of overlap in support for exposure --> outcome association
+upset_sig_cis <- lapply(sig_MR_relaxed, function(x){
+  list("mask:pLOF|miss" = x |> dplyr::filter(IVset == "mask:pLOF|miss") |>  dplyr::pull(exposure),
+       "exome:ultrarare" = x |> dplyr::filter(IVset == "exome:ultrarare") |>  dplyr::pull(exposure),
+       "exome:rare" = x |> dplyr::filter(IVset == "exome:rare") |>  dplyr::pull(exposure),
+       "exome:common" = x |> dplyr::filter(IVset == "exome:common") |>  dplyr::pull(exposure),
+       "genome:common" = x |> dplyr::filter(IVset == "genome:common") |>  dplyr::pull(exposure))})
+
+# Total significant (P<5e-05) causal protein --> outcome IVW estimates provided by rare IVs (variants and masks)
+a <- sapply(upset_sig_cis, function(x){length(unique(c(x$`mask:pLOF|miss`, x$`exome:rare`, x$`exome:ultrarare`)))})
+c(a, TOTAL = sum(a)) #65
+
+# How many of these are undetected by common IV methods at this threshold
+b <- sapply(upset_sig_cis, function(x){length(setdiff(c(x$`mask:pLOF|miss`, x$`exome:rare`, x$`exome:ultrarare`), c(x$`exome:common`, x$`genome:common`)))})
+c(b, TOTAL = sum(b)) #55
+
+# How many of these lack >=3 common variant cis-instruments for the tested exposure?
+## Exposure:outcome pairs significant with rare instrumentation
+a_pairs <- lapply(sig_MR_relaxed, function(x){x |> dplyr::filter(IVset %in% c("mask:pLOF|miss", "exome:rare", "exome:ultrarare")) |> pull(pair) |> unique()})
+## Exposure:outcome pairs with sufficient common cis-IVs to test
+common_pairs <- num_IVs_relaxed |> dplyr::filter(cis_trans == "cis", grepl("common", IV_set), value >= 3) |> pull(name) |> unique()
+d <- sapply(a_pairs, function(x){sum(!(x %in% common_pairs))})
+c(d, TOTAL=sum(d)) #35
+## What are these pairs?
+# sapply(a_pairs, function(x){x[!(x %in% common_pairs)]})
+
+## How many have sufficient common cis-IVs but lack evidence for a causal association (at differing p-value thresholds)
+## Common cis-IV results for signiciant rare cis-IV protein --> outcome results:
+overlap <- lapply(res_MR_common, function(x){x |> dplyr::filter(pair %in% do.call("c", a_pairs)) |> 
+    dplyr::arrange(pval) |> dplyr::filter(duplicated(pair) == FALSE)})
+# Of these, pairs significant at differing theshold
+e <- unlist(lapply(overlap, function(x){table(cut(x$pval, breaks = c(0,alpha_cis3,0.05,1)))[2]})) # 0.05>p>5x10^-5
+c(e, TOTAL=sum(e)) # 5
+f <- unlist(lapply(overlap, function(x){table(cut(x$pval, breaks = c(0,alpha_cis3,0.05,1)))[3]})) # p>0.05
+c(f, TOTAL = sum(f))
+
+# 65 causal protein --> outcome relationships when instrumenting using rare cis variants or masks (p<5x10^-5)
+# 55 undetected when using common cis-IVs at this threshold
+## Of these 55:
+### 35 lacked sufficient common-IVs and were not tested (64%)
+### 5 are significant using common-IVs at a relaxed threshold 0.05>p>5x10^-5 (9%)
+### 15 were tested but using common-IVs but no causal associaton was detected  (27%)
+
+## Which are these 15 discordant results?
+# do.call("rbind",lapply(overlap, function(x){x |> dplyr::filter(pval > 0.05)}))
+
+## Example of concordant results from instrument sets (PRSS53 in BMI)
+## Example of rare eviedence only... GMPR
+## Example of discordance...
+
+## Example from gene instrumented with rare IVs (GMPR?)
+```
+
+**Example results**
+
+Plot effect estimates across IV sets for a given exposure-outcome pair
+
+```{r}
+#| label: plot-mr-results
+#| fig.width: 8
+#| fig.height: 4.5
+
+plot_results <- function(exposure, outcome){
+  
+  pair <- paste(exposure, outcome, sep = "_")
+  # Individual SNP results
+  dat_snps <- do.call("rbind",lapply(harmonised_snps_relaxed[[outcome]][[pair]][names(paper_IVsets)], function(x){
+    x |> dplyr::filter(cis_trans == "cis", mr_keep == TRUE) |>
+      dplyr::select(SNP, beta.exposure, beta.outcome, pval.exposure, pval.outcome, se.exposure, se.outcome)})) |>
+    tibble::rownames_to_column("IV_set") |>
+    dplyr::mutate(IV_set = factor(IVsets[sub("\\..*","",IV_set)], levels = IVsets)) |>
+    dplyr::filter(IV_set %in% paper_IVsets) |>
+    dplyr::arrange(desc(IV_set))
+  
+  # MR estimates
+  dat_res <- res_MR_relaxed[[outcome]][[pair]] |> 
+    dplyr::filter(cis_trans == "cis", method %in% c("Wald ratio", "Inverse variance weighted"), IV_set %in% names(paper_IVsets)) |>
+    dplyr::mutate(IV_set = factor(IVsets[IV_set], levels = IVsets))
+  
+  ## IVW plot
+  p_slope <- dat_snps |> ggplot(aes(x = beta.exposure, y = beta.outcome, colour = IV_set)) +
+    geom_hline(yintercept = 0, colour = "grey70") +
+    geom_vline(xintercept = 0, colour = "grey70") +
+    geom_errorbar(aes(xmin = beta.exposure - 1.96*se.exposure, xmax = beta.exposure + 1.96*se.exposure), height = 0, alpha = 0.3) +
+    geom_errorbar(aes(ymin = beta.outcome - 1.96*se.outcome, ymax = beta.outcome + 1.96*se.outcome), height = 0, alpha = 0.3) +
+    geom_abline(data = dat_res |> dplyr::filter(nsnp > 1), aes(slope = b, intercept = 0, colour = IV_set)) +
+    geom_point(size = 2) +
+    scale_colour_manual(values = cols_IVsets) +
+    theme_minimal() +
+    theme(legend.position = "bottom",
+          plot.title = element_text(hjust = 0.5)) +
+    guides(colour = guide_legend(nrow = 2)) +
+    labs(x = expression(beta["exposure"]), y = expression(beta["outcome"]), title = paste("Exposure:", exposure, "Outcome:", outcome))
+    
+  ## Forest plot
+  p_forest <- dat_res |> ggplot(aes(x = b, y = IV_set, colour = IV_set)) +
+    geom_vline(xintercept = 0, colour = "grey20", lty = 2) +
+    geom_point(aes(size = nsnp)) +
+    geom_errorbarh(aes(xmin = b-1.96*se, xmax = b+1.96*se, group = cis_trans), height = 0.4) +
+    scale_colour_manual(values = cols_IVsets) +
+    theme_minimal() + guides(colour = "none") +
+    theme(plot.title = element_text(hjust = 0.5), 
+          axis.text.x = element_text(size = 7),
+          legend.position = "right") +
+    labs(x = "IVW", y = "", size = "n(IVs)")
+  
+  cowplot::ggdraw() + cowplot::draw_plot(p_slope,0,0,0.5,1) + cowplot::draw_plot(p_forest,0.5,0.3,0.5,0.6)
+}
+
+plot_results(exposure = "PRSS53", outcome = "BMI")
+plot_results(exposure = "GMPR", outcome = "RBCcount")
+plot_results(exposure = "VNN1", outcome = "VitD")
+plot_results(exposure = "PDCD6", outcome = "VitD")
+```
 
 **Comparison of IVW effect estimates across instrument sets**
 
