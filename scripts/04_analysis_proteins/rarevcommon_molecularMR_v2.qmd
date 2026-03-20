@@ -24,6 +24,9 @@ library(dotenv)
 library(UpSetR)
 library(grid)
 library(gridExtra)
+library(Gviz)
+library(GenomicRanges)
+
 
 dotenv::load_dot_env(file = here("config.env"))
 data_dir <- Sys.getenv("data_dir")
@@ -182,6 +185,13 @@ prunein_relaxed <- do.call("rbind", lapply(prunein_files_relaxed, function(x){da
 prunein_relaxed <- unlist(lapply(strsplit(prunein_relaxed, ":"), function(x){paste0(x[1],":",x[2],"_",tolower(x[3]),"_",tolower(x[4]))}))
 
 # --------------------------------------------------------------------------------------- #
+# List of LD pruned common variants (filtered from all IVs combined; P<5e-8)
+prunein_exwas_files <- grep("prune.in", list.files(file.path(data_dir,"sumstats/proteomics/protein_pQTL_pruning"), pattern = "common", full = TRUE), value = T)
+prunein_exwas <- do.call("rbind", lapply(prunein_exwas_files, function(x){data.table::fread(x, header = F, data.table = F)}))[,1]
+
+prunein_gwas_files <- grep("prune.in", list.files(file.path(data_dir,"sumstats/proteomics/protein_pQTL_pruning"), pattern = "gwas", full = TRUE), value = T)
+prunein_gwas <- do.call("rbind", lapply(prunein_gwas_files, function(x){data.table::fread(x, header = F, data.table = F)}))[,1]
+
 # Data filtering
 
 ## Retain the following instrument sets for final analysis:
@@ -706,7 +716,11 @@ lookup_pQTLs <- lapply(lookup_pQTLs, function(x){
   return(out)})
 
 # Retain LD pruned common variants
-#### [FIX]
+lookup_pQTLs$sun_gwas_variant_common_clumped <- lookup_pQTLs$sun_gwas_variant_common_clumped |>
+  dplyr::filter(variant %in% prunein_gwas)
+
+lookup_pQTLs$dhindsa_exwas_variant_common <- lookup_pQTLs$dhindsa_exwas_variant_common |>
+  dplyr::filter(variant %in% gsub(":","-",prunein_exwas))
 
 # Relaxed theshold for rare variants (P<1e-4)
 lookup_pQTLs_relaxed <- lapply(lookup_pQTLs, function(x){
@@ -941,7 +955,7 @@ Are the higher numbers of cis-gene and trans-gene (within the same chromosome) a
 ```{r}
 #| label: pleiotropy-vs-genedensity
 #| fig.height: 4
-#| fig.width: 16
+#| fig.width: 12
 #| cache: TRUE
 
 # Annotate WES pQTLs (common IVs P<5e-8, rare IVs P<1e-4) with numbe.r of genes in proximity
@@ -982,8 +996,8 @@ p9 <- pqtls_assocs_joined_relaxed |>
                   proximal_gene %in% paste0("'", geneinfo_olink$gene, "'") & 
                   proximal_gene %in% shared_genes) |>
   ggplot(aes(x = n_olinkgenes_1mb, y = n_cis, colour = IV_set)) +
-  geom_hline(yintercept = c(0,5), col = "grey70") + 
-  geom_jitter(width = 0.2, height = 0) +
+  geom_hline(yintercept = c(0,3), col = "grey70") + 
+  geom_jitter(width = 0.2, height = 0, size = 2) +
   facet_grid(IV_set ~ .) +
   scale_colour_manual(values = cols_IVsets) +
   theme_minimal() +
@@ -997,8 +1011,8 @@ p10 <- pqtls_assocs_joined_relaxed |>
                   proximal_gene %in% paste0("'", geneinfo_olink$gene, "'") & 
                   proximal_gene %in% shared_genes) |>
   ggplot(aes(x = n_codinggenes_1mb, y = n_cis, colour = IV_set)) +
-  geom_hline(yintercept = c(0,5), col = "grey70") + 
-  geom_jitter(width = 0.2, height = 0) +
+  geom_hline(yintercept = c(0,3), col = "grey70") + 
+  geom_jitter(width = 0.2, height = 0, size = 2) +
   facet_grid(IV_set ~ .) +
   scale_colour_manual(values = cols_IVsets) +
   theme_minimal() +
@@ -1090,7 +1104,6 @@ shared_transsignals$prop_shared = shared_transsignals$n_trans_shared/shared_tran
 #   ggplot(aes(x = n_codinggenes_1mb, y = prop_shared)) +
 #   geom_point()
 
-
 ```
 
 ### IV heterogenity
@@ -1130,7 +1143,7 @@ het |>
 
 ```{r}
 #| label: full-results
-#| fig.width: 18
+#| fig.width: 12
 #| fig.height: 33
 #| cache: TRUE
 
@@ -1144,7 +1157,7 @@ plot_fullresults <- function(results_MR, outcome, nsnps = 3, cistrans = "cis"){
       dplyr::filter(method %in% c("Wald ratio", "Inverse variance weighted"),
                     cis_trans == cistrans,
                     (IV_set %in% names(variant_IVsets) & nsnp >= nsnps) | !(IV_set %in% names(variant_IVsets)),
-                    IV_set %in% names(paper_IVsets))
+                    IV_set %in% names(variant_IVsets))
   }))
   # Format for plotting
   df <- df |>
@@ -1182,12 +1195,12 @@ gridExtra::grid.arrange(grobs =
 How many new highly significant causal associations are detected with rare variants or gene based masks that a. cannot be instrumented in cis with common variants or b. show no causal effect when using common-IVs (suggesting rare variants perturb the gene in a more relevant fashion)?:
 
 ```{r}
-#| label: new-causal-effects
+#| label: causal-effect-overlap
 #| cache: TRUE
 #| include: FALSE
 
-# Pull significant MR results (at p<0.05 for comparison of cis IV sets)
-# >=3 IVs for variant-based instruments, 1 sufficient for masks
+# Pull significant MR results (at p<5e-05 for comparison of cis IV sets)
+# >=3 IVs for variant-based instruments, 1 sufficient for masks (exclude masks for now?)
 
 sig_MR_relaxed <- lapply(res_MR_relaxed, function(x){
   do.call("rbind", lapply(x, function(y){
@@ -1199,67 +1212,100 @@ sig_MR_relaxed <- lapply(res_MR_relaxed, function(x){
                     pval <= alpha_cis3)})) |> # multiple testing correction
     dplyr::mutate(IVset = IVsets[IV_set])})
 
-# All common IV results
-res_MR_common <- lapply(res_MR_relaxed, function(x){
-  do.call("rbind",lapply(x, function(y){
-    dat <- y |> 
-      dplyr::filter(method == "Inverse variance weighted",
-                    cis_trans == "cis",
-                    nsnp >= 3,
-                    IV_set %in% c("dhindsa_exwas_variant_common","sun_gwas_variant_common_clumped")) |>
-      dplyr::mutate(IVset = IVsets[IV_set])}))})
-
 # Upset plot of overlap in support for exposure --> outcome association
 upset_sig_cis <- lapply(sig_MR_relaxed, function(x){
-  list("mask:pLOF|miss" = x |> dplyr::filter(IVset == "mask:pLOF|miss") |>  dplyr::pull(exposure),
-       "exome:ultrarare" = x |> dplyr::filter(IVset == "exome:ultrarare") |>  dplyr::pull(exposure),
-       "exome:rare" = x |> dplyr::filter(IVset == "exome:rare") |>  dplyr::pull(exposure),
-       "exome:common" = x |> dplyr::filter(IVset == "exome:common") |>  dplyr::pull(exposure),
-       "genome:common" = x |> dplyr::filter(IVset == "genome:common") |>  dplyr::pull(exposure))})
+  list("mask:pLOF|miss" = x |> dplyr::filter(IVset == "mask:pLOF|miss") |>  dplyr::pull(pair) |> unique(),
+       "IV:rare" = x |> dplyr::filter(IVset %in% c("exome:ultrarare","exome:rare")) |>  dplyr::pull(pair) |> unique(),
+       "IV:common" = x |> dplyr::filter(IVset %in% c("exome:common", "genome:common")) |>  dplyr::pull(pair) |> unique())})
+upset_sig_cis <- purrr::map(names(upset_sig_cis[[1]]), ~ purrr::flatten_chr(purrr::map(upset_sig_cis, .x)))
+names(upset_sig_cis) <- c("mask:pLOF|miss","variant:rare","variant:common")
 
-# Total significant (P<5e-05) causal protein --> outcome IVW estimates provided by rare IVs (variants and masks)
-a <- sapply(upset_sig_cis, function(x){length(unique(c(x$`mask:pLOF|miss`, x$`exome:rare`, x$`exome:ultrarare`)))})
-c(a, TOTAL = sum(a)) #65
+# Pull significant MR results (at p<0.01 for comparison of cis IV sets)
+# >=3 IVs for variant-based instruments, 1 sufficient for masks (exclude masks for now?)
 
-# How many of these are undetected by common IV methods at this threshold
-b <- sapply(upset_sig_cis, function(x){length(setdiff(c(x$`mask:pLOF|miss`, x$`exome:rare`, x$`exome:ultrarare`), c(x$`exome:common`, x$`genome:common`)))})
-c(b, TOTAL = sum(b)) #55
+sig_MR_relaxed_0.01 <- lapply(res_MR_relaxed, function(x){
+  do.call("rbind", lapply(x, function(y){
+    dat <- y |> 
+      dplyr::filter(method %in% c("Wald ratio", "Inverse variance weighted"),
+                    cis_trans == "cis",
+                    (IV_set %in% names(variant_IVsets) & nsnp >= 3) | !(IV_set %in% names(variant_IVsets)),
+                    IV_set %in% names(paper_IVsets),
+                    pval <= 0.01)})) |> # multiple testing correction
+    dplyr::mutate(IVset = IVsets[IV_set])})
 
-# How many of these lack >=3 common variant cis-instruments for the tested exposure?
-## Exposure:outcome pairs significant with rare instrumentation
-a_pairs <- lapply(sig_MR_relaxed, function(x){x |> dplyr::filter(IVset %in% c("mask:pLOF|miss", "exome:rare", "exome:ultrarare")) |> pull(pair) |> unique()})
-## Exposure:outcome pairs with sufficient common cis-IVs to test
+# Upset plot of overlap in support for exposure --> outcome association
+upset_sig_cis_0.01 <- lapply(sig_MR_relaxed_0.01, function(x){
+  list("mask:pLOF|miss" = x |> dplyr::filter(IVset == "mask:pLOF|miss") |>  dplyr::pull(pair) |> unique(),
+       "IV:rare" = x |> dplyr::filter(IVset %in% c("exome:ultrarare","exome:rare")) |>  dplyr::pull(pair) |> unique(),
+       "IV:common" = x |> dplyr::filter(IVset %in% c("exome:common", "genome:common")) |>  dplyr::pull(pair) |> unique())})
+upset_sig_cis_0.01 <- purrr::map(names(upset_sig_cis_0.01[[1]]), ~ purrr::flatten_chr(purrr::map(upset_sig_cis_0.01, .x)))
+names(upset_sig_cis_0.01) <- c("mask:pLOF|miss","variant:rare","variant:common")
+
+## Exposure:outcome pairs with sufficient cis-IVs to test
 common_pairs <- num_IVs_relaxed |> dplyr::filter(cis_trans == "cis", grepl("common", IV_set), value >= 3) |> pull(name) |> unique()
-d <- sapply(a_pairs, function(x){sum(!(x %in% common_pairs))})
-c(d, TOTAL=sum(d)) #35
-## What are these pairs?
-# sapply(a_pairs, function(x){x[!(x %in% common_pairs)]})
+rare_pairs <- num_IVs_relaxed |> dplyr::filter(cis_trans == "cis", grepl("rare_pruned", IV_set), value >= 3) |> pull(name) |> unique()
 
-## How many have sufficient common cis-IVs but lack evidence for a causal association (at differing p-value thresholds)
-## Common cis-IV results for signiciant rare cis-IV protein --> outcome results:
-overlap <- lapply(res_MR_common, function(x){x |> dplyr::filter(pair %in% do.call("c", a_pairs)) |> 
-    dplyr::arrange(pval) |> dplyr::filter(duplicated(pair) == FALSE)})
-# Of these, pairs significant at differing theshold
-e <- unlist(lapply(overlap, function(x){table(cut(x$pval, breaks = c(0,alpha_cis3,0.05,1)))[2]})) # 0.05>p>5x10^-5
-c(e, TOTAL=sum(e)) # 5
-f <- unlist(lapply(overlap, function(x){table(cut(x$pval, breaks = c(0,alpha_cis3,0.05,1)))[3]})) # p>0.05
-c(f, TOTAL = sum(f))
+## Overlap in sig exposure-outcome pairs (P<5e-5)
+g1 <- ggvenn::ggvenn(upset_sig_cis[c(2,3)], fill_color = c("steelblue1","orange"), set_name_size = 5) + 
+  labs(title = "Exposure:outcome pair \nP(IVW)<5e-5") +
+  theme(plot.title = element_text(hjust = 0.5))
+### Of rare unique:
+### Lack of common IVs
+table(g1$data |> dplyr::filter(`variant:rare` == TRUE & `variant:common` == FALSE) |> pull(`_key`) %in% common_pairs)
+### Of common unique:
+### Lack of rare IVs
+table(g1$data |> dplyr::filter(`variant:rare` == FALSE & `variant:common` == TRUE) |> pull(`_key`) %in% rare_pairs)
+### Of shared:
+### Concordant vs discordant direction of effect
+shared_5e5 <- g1$data |> dplyr::filter(`variant:rare` == TRUE & `variant:common` == TRUE) |> pull(`_key`)
+concordant_5e5 <- do.call("rbind",lapply(sig_MR_relaxed, function(x){x |> dplyr::filter(pair %in% shared_5e5)})) |>
+  dplyr::filter(nsnp >= 3) |>
+  group_by(pair) |>
+  summarise(length(unique(sign(b))))
+## Concordant sign?
+table(concordant_5e5[,2]==1)
 
-# 65 causal protein --> outcome relationships when instrumenting using rare cis variants or masks (p<5x10^-5)
-# 55 undetected when using common cis-IVs at this threshold
-## Of these 55:
-### 35 lacked sufficient common-IVs and were not tested (64%)
-### 5 are significant using common-IVs at a relaxed threshold 0.05>p>5x10^-5 (9%)
-### 15 were tested but using common-IVs but no causal associaton was detected  (27%)
+## Overlap in sig exposure-outcome pairs (P<0.01)
+g2 <- ggvenn::ggvenn(upset_sig_cis_0.01[c(2,3)], fill_color = c("steelblue1","orange"), set_name_size = 5) +
+  labs(title = "Exposure:outcome pair \nP(IVW)<0.01") +
+  theme(plot.title = element_text(hjust = 0.5))
+### Of rare unique:
+### Lack of common IVs
+table(g2$data |> dplyr::filter(`variant:rare` == TRUE & `variant:common` == FALSE) |> pull(`_key`) %in% common_pairs)
+### Which pairs are these?:
+# g2$data |>
+#   dplyr::filter(`variant:rare` == TRUE & `variant:common` == FALSE) |>
+#   dplyr::mutate(commonIVs_exist = `_key` %in% common_pairs)
 
-## Which are these 15 discordant results?
-# do.call("rbind",lapply(overlap, function(x){x |> dplyr::filter(pval > 0.05)}))
+### Of common unique:
+### Lack of rare IVs
+table(g2$data |> dplyr::filter(`variant:rare` == FALSE & `variant:common` == TRUE) |> pull(`_key`) %in% rare_pairs)
+### Which pairs are these?:
+# g2$data |>
+#   dplyr::filter(`variant:rare` == FALSE & `variant:common` == TRUE) |>
+#   dplyr::mutate(rareIVs_exist = `_key` %in% rare_pairs)
 
-## Example of concordant results from instrument sets (PRSS53 in BMI)
-## Example of rare eviedence only... GMPR
-## Example of discordance...
+### Of shared:
+### Concordant vs discordant direction of effect
+shared_0.01 <- g2$data |> dplyr::filter(`variant:rare` == TRUE & `variant:common` == TRUE) |> pull(`_key`)
+concordant_0.01 <- do.call("rbind",lapply(sig_MR_relaxed_0.01, function(x){x |> dplyr::filter(pair %in% shared_0.01)})) |>
+  dplyr::filter(nsnp >= 3) |>
+  group_by(pair) |>
+  summarise(length(unique(sign(b))))
+## Concordant sign?
+table(concordant_0.01[,2]==1)
 
-## Example from gene instrumented with rare IVs (GMPR?)
+# 38 causal protein --> outcome relationships when instrumenting using rare cis variants or masks (p<5x10^-5)
+# 31 undetected when using common cis-IVs at this threshold
+## Of these 31:
+### 20 lacked sufficient common-IVs and were not tested
+### 2 are significant using common-IVs at a relaxed threshold 0.05>p>5x10^-5
+### 9 were tested but using common-IVs but no causal associaton was detected
+```
+
+```{r}
+#| label: venns
+gridExtra::grid.arrange(grobs = list(g1,g2), nrow = 1)
 ```
 
 **Example results**
@@ -1268,14 +1314,14 @@ Plot effect estimates across IV sets for a given exposure-outcome pair
 
 ```{r}
 #| label: plot-mr-results
-#| fig.width: 8
-#| fig.height: 4.5
+#| fig.width: 14
+#| fig.height: 8.5
 
 plot_results <- function(exposure, outcome){
   
   pair <- paste(exposure, outcome, sep = "_")
   # Individual SNP results
-  dat_snps <- do.call("rbind",lapply(harmonised_snps_relaxed[[outcome]][[pair]][names(paper_IVsets)], function(x){
+  dat_snps <- do.call("rbind",lapply(harmonised_snps_relaxed[[outcome]][[pair]][names(variant_IVsets)], function(x){
     x |> dplyr::filter(cis_trans == "cis", mr_keep == TRUE) |>
       dplyr::select(SNP, beta.exposure, beta.outcome, pval.exposure, pval.outcome, se.exposure, se.outcome)})) |>
     tibble::rownames_to_column("IV_set") |>
@@ -1285,7 +1331,7 @@ plot_results <- function(exposure, outcome){
   
   # MR estimates
   dat_res <- res_MR_relaxed[[outcome]][[pair]] |> 
-    dplyr::filter(cis_trans == "cis", method %in% c("Wald ratio", "Inverse variance weighted"), IV_set %in% names(paper_IVsets)) |>
+    dplyr::filter(cis_trans == "cis", method %in% c("Wald ratio", "Inverse variance weighted"), IV_set %in% names(variant_IVsets)) |>
     dplyr::mutate(IV_set = factor(IVsets[IV_set], levels = IVsets))
   
   ## IVW plot
@@ -1309,19 +1355,29 @@ plot_results <- function(exposure, outcome){
     geom_point(aes(size = nsnp)) +
     geom_errorbarh(aes(xmin = b-1.96*se, xmax = b+1.96*se, group = cis_trans), height = 0.4) +
     scale_colour_manual(values = cols_IVsets) +
+    scale_size_area() +
     theme_minimal() + guides(colour = "none") +
     theme(plot.title = element_text(hjust = 0.5), 
           axis.text.x = element_text(size = 7),
           legend.position = "right") +
     labs(x = "IVW", y = "", size = "n(IVs)")
   
-  cowplot::ggdraw() + cowplot::draw_plot(p_slope,0,0,0.5,1) + cowplot::draw_plot(p_forest,0.5,0.3,0.5,0.6)
+  cowplot::ggdraw() + cowplot::draw_plot(p_slope,0,0,0.5,1) + cowplot::draw_plot(p_forest,0.5,0.3,0.5,0.5)
 }
 
-plot_results(exposure = "PRSS53", outcome = "BMI")
-plot_results(exposure = "GMPR", outcome = "RBCcount")
-plot_results(exposure = "VNN1", outcome = "VitD")
-plot_results(exposure = "PDCD6", outcome = "VitD")
+## Example of concordant results from instrument sets (PRSS53 in BMI)
+#plot_results(exposure = "PRSS53", outcome = "BMI")
+ex1 <- plot_results(exposure = "APOE", outcome = "LDL")
+## Example of rare eviedence only 
+#plot_results(exposure = "GMPR", outcome = "RBCcount") ## Lack of common IVs
+ex2 <- plot_results(exposure = "PCSK9", outcome = "LDL") ## Lack of common IVs
+ex3 <- plot_results(exposure = "CDSN", outcome = "PlatVol")
+#ex3 <- plot_results(exposure = "VNN1", outcome = "VitD")
+## Example of common evidence only
+#ex4 <- plot_results(exposure = "PRSS53", outcome = "LDL")
+ex4 <- plot_results(exposure = "CSTB", outcome = "PlatVol")
+
+gridExtra::grid.arrange(grobs = list(ex1,ex2,ex3,ex4), nrow = 2)
 ```
 
 **Comparison of IVW effect estimates across instrument sets**
@@ -1450,16 +1506,16 @@ compare_cistrans <- function(results_MR, IVset, n_snps=3){
 }
 
 # Proportion of concordant/discordant MR estimates based on heterogenity estimates and direction of effect
-prop_concordant <- function(estimates){
+prop_concordant <- function(estimates, pval_thresh = 0.05){
   
   estimate_cols <- grep("\\.beta",colnames(estimates), value = T)
   pval_cols <- grep("\\.pval",colnames(estimates), value = T)
   sets <- sub(".beta", "", estimate_cols) # IV sets being compared
   
   df_counts <- data.frame(n_instrumented_genes = nrow(estimates),
-                       n_nohet = sum(estimates$Qpval > 0.05),
-                       n_het_concordant = sum(estimates$Qpval <= 0.05 & sign(estimates[estimate_cols[1]]) == sign(estimates[estimate_cols[2]])),
-                       n_het_discordant = sum(estimates$Qpval <= 0.05 & sign(estimates[estimate_cols[1]]) != sign(estimates[estimate_cols[2]])))
+                       n_nohet = sum(estimates$Qpval > pval_thresh),
+                       n_het_concordant = sum(estimates$Qpval <= pval_thresh & sign(estimates[estimate_cols[1]]) == sign(estimates[estimate_cols[2]])),
+                       n_het_discordant = sum(estimates$Qpval <= pval_thresh & sign(estimates[estimate_cols[1]]) != sign(estimates[estimate_cols[2]])))
   
   df_props <- df_counts[,2:4]/df_counts[,1]
   colnames(df_props) <- sub("n_","prop_",colnames(df_props))
@@ -1467,14 +1523,14 @@ prop_concordant <- function(estimates){
   df_out <- cbind(df_counts, df_props)
   
   # Discordant results
-  estimates_het <- estimates |> dplyr::filter(Qpval <= 0.05)
+  estimates_het <- estimates |> dplyr::filter(Qpval <= pval_thresh)
   
   df_counts_het <- data.frame(n_het_genes = nrow(estimates_het),
-                              sig1 = sum(estimates_het[pval_cols[1]] < estimates_het[pval_cols[2]] & estimates_het[pval_cols[2]] > 0.05),
-                              sig2 = sum(estimates_het[pval_cols[2]] < estimates_het[pval_cols[1]] & estimates_het[pval_cols[1]] > 0.05),
-                              n_both_sig_concordant = sum(estimates_het[pval_cols[1]] < 0.05 & estimates_het[pval_cols[2]] < 0.05 & 
+                              sig1 = sum(estimates_het[pval_cols[1]] < estimates_het[pval_cols[2]] & estimates_het[pval_cols[2]] > pval_thresh),
+                              sig2 = sum(estimates_het[pval_cols[2]] < estimates_het[pval_cols[1]] & estimates_het[pval_cols[1]] > pval_thresh),
+                              n_both_sig_concordant = sum(estimates_het[pval_cols[1]] < pval_thresh & estimates_het[pval_cols[2]] < pval_thresh & 
                                                     sign(estimates_het[estimate_cols[1]]) == sign(estimates_het[estimate_cols[2]])),
-                              n_both_sig_discordant = sum(estimates_het[pval_cols[1]] < 0.05 & estimates_het[pval_cols[2]] < 0.05 & 
+                              n_both_sig_discordant = sum(estimates_het[pval_cols[1]] < pval_thresh & estimates_het[pval_cols[2]] < pval_thresh & 
                                                     sign(estimates_het[estimate_cols[1]]) != sign(estimates_het[estimate_cols[2]])))
   
   colnames(df_counts_het)[2] <- paste0("n_",sets[1],"_sig")
@@ -1502,7 +1558,8 @@ plot_concordance <- function(concordance, title){
          y = " Proportion of MR results \n(protein --> outcome)") +
     scale_fill_manual(name = "",
       values = c("tomato","grey90"), 
-      labels = c("Qpval<0.05","Qpval>0.05")) +
+      labels = c("Qpval<thresh","Qpval>thresh")) +
+    geom_text(dat = plot_dat_1 |> dplyr::filter(name == "n_het"), aes(x = outcome, y = 1.05, label = value), colour = "tomato") +
     theme_minimal() +
     theme(axis.text.x = element_text(angle = 45, hjust = 1),
           legend.text = element_text(size = 10),
@@ -1524,7 +1581,8 @@ plot_concordance <- function(concordance, title){
   }else{
     fill_names = c(IVsets[sets], "Sig. conc.", "Sig. dis.")
     names(fill_names) <- unique(plot_dat_2$name)
-    fill_col = c("grey", "grey30",as.character(cols_IVsets[fill_names[1:2]]))
+    fill_col = c(as.character(cols_IVsets[fill_names[1:2]]), "grey", "grey30")
+    names(fill_col) <- names(fill_names)
   }
   
   p2 <- plot_dat_2 |> ggplot(aes(x = outcome, y = value, fill = name)) +
@@ -1546,7 +1604,7 @@ plot_concordance <- function(concordance, title){
   
 }
 
-plot_estimates <- function(estimates, name){
+plot_estimates <- function(estimates, name, pval_thresh = 0.05){
   
   estimates <- as.data.frame(estimates)
   col_names <- names(estimates)
@@ -1565,7 +1623,7 @@ plot_estimates <- function(estimates, name){
   mod_lm <- lm(estimates[,3] ~ estimates[,2])
   slope <- round(coefficients(mod_lm)[2],2)
   
-  flag_point <- estimates$Qpval <= 0.05
+  flag_point <- estimates$Qpval <= pval_thresh
   
   range_min <- min(min(estimates[,2]), min(estimates[,3])) #min(na.exclude(errorbar_xmin, errorbar_ymin)))
   range_max <- max(max(estimates[,2]), max(estimates[,3])) #min(na.exclude(errorbar_xmax, errorbar_ymax)))
@@ -1581,7 +1639,7 @@ plot_estimates <- function(estimates, name){
   estimates_plot |>
     ggplot(aes_string(x = col_names[2], y = col_names[3])) +
     geom_abline(slope = 1, intercept = 0, colour = "steelblue", lty = 2, lwd = 0.5) +
-    geom_point(aes(colour = estimates_plot$Qpval <= 0.05), size = 2, shape = 16) +  
+    geom_point(aes(colour = estimates_plot$Qpval <= pval_thresh), size = 2, shape = 16) +  
     geom_errorbar(xmin = estimates_plot$errorbar_xmin,
                   xmax = estimates_plot$errorbar_xmax, colour = "tomato") +
     geom_errorbar(ymin = estimates_plot$errorbar_ymin,
@@ -1599,7 +1657,7 @@ plot_estimates <- function(estimates, name){
 # Upset plot comparing signifiant causal estimates across variant sets
 # Restrtcited to those proteins that could be instrumented with >= 3 variants across the comparison sets
 
-plot_upset <- function(IVsets_list, cis_trans = "all", pval = 0.01){
+plot_upset <- function(IVsets_list, cis_trans = "all", pval_thresh = 0.05){
   
   if(cis_trans == "all"){inlist = summary_sig}
   if(cis_trans == "cis"){inlist = summary_sig_cis}
@@ -1611,7 +1669,7 @@ plot_upset <- function(IVsets_list, cis_trans = "all", pval = 0.01){
     tests <- rownames(dat) # Exposure_outcome
     shared_tests <- tests[apply(dat, MARGIN = 1, function(x){sum(!(is.na(x)))}) == 2]
     dat <- dat[shared_tests,]
-    dat_sig <- dat <= pval
+    dat_sig <- dat <= pval_thresh
     
     tests <- rownames(dat_sig)
     list_sig <- apply(dat_sig, MARGIN = 2, FUN = function(x){tests[x]}, simplify = F) # Names of significant exposures
@@ -1707,7 +1765,7 @@ gridExtra::grid.arrange(grobs = mapply(plot_estimates, estimates = comp_IVWs_2b,
 
 ```{r}
 #| label: fig-compIVs-commonvrare-concordance
-#| fig.width: 8
+#| fig.width: 7
 #| fig.height: 5
 
 plot_concordance(concordance = comp_IVWs_1a_conc, title = "IVW estimate concordance: WES common vs rare cis-IVs")
@@ -1716,6 +1774,9 @@ plot_concordance(concordance = comp_IVWs_1b_conc, title = "IVW estimate concorda
 plot_concordance(concordance = comp_IVWs_2a_conc, title = "IVW estimate concordance: WES common vs ultrarare cis-IVs")
 plot_concordance(concordance = comp_IVWs_2b_conc, title = "IVW estimate concordance: WES common vs ultrarare trans-IVs") 
 
+# Mean concordance/discordance (across outcomes)
+colMeans(comp_IVWs_1a_conc$all) # cis-common v rare
+colMeans(comp_IVWs_2a_conc$all) # cis-common v ultrarare
 ```
 
 3a) Common (GWAS) vs rare variant cis-IVs (ExWAS)\
@@ -1795,7 +1856,7 @@ het_genes <- mapply(FUN = function(x,y){paste(x,y,sep = "_")}, x = het_genes, y 
 
 ```{r}
 #| label: fig-compIVs-GWAScommonvrare-concordance
-#| fig.width: 8
+#| fig.width: 7
 #| fig.height: 5
 
 plot_concordance(concordance = comp_IVWs_3a_conc, title = "IVW estimate concordance: GWAS common vs rare cis-IVs")
@@ -2089,6 +2150,166 @@ lapply(res_IVW_consistant, plot_forest)[c(1,2,5,6,7,8,9,10,11)]
 lapply(res_IVW_consistant, plot_forest)[c(3,4)]
 
 ```
+
+## Case study: SMPD1-SBP
+
+```{r}
+#| label: case-study
+#| fig.width: 7
+#| fig.height: 6
+
+## MR with LD pruned rare variants (in cis region, including outside of gene):
+plot_results(exposure = "SMPD1", outcome = "SBP")
+
+## Filter to cis variants in the gene itself and repeat MR
+ivs_SMPD1 <- lapply(harmonised_snps_relaxed$SBP$SMPD1_SBP, function(x){x |> dplyr::filter(cis_trans == "cis")})
+ivs_SMPD1$dhindsa_exwas_variant_ultrarare_pruned_truecis <- ivs_SMPD1$dhindsa_exwas_variant_ultrarare_pruned |> 
+  dplyr::filter(gene.outcome == "SMPD1")
+ivs_SMPD1$dhindsa_exwas_variant_rare_pruned_truecis <- ivs_SMPD1$dhindsa_exwas_variant_rare_pruned |> 
+  dplyr::filter(gene.outcome == "SMPD1")
+
+mr_SMPD1 <- lapply(ivs_SMPD1, function(x){TwoSampleMR::mr(x)})
+
+## Derive wald ratios for all SMPD1 cis-IVs, all frequencies
+keep_cols <- c("SNP","variant","chr.exposure","pos.exposure","beta.exposure","beta.outcome",
+               "se.exposure","se.outcome","pval.exposure","pval.outcome",
+               "eaf.exposure","cis_trans","gene.outcome", "ANNOTATON")
+
+ivs_SMPD1_all <- do.call("bind_rows", mapply(FUN = function(x,y){
+  keep_cols_df <- intersect(keep_cols, colnames(x))
+  x <- x[,keep_cols_df]
+  x$IV_set <- y
+  return(x)}, x = ivs_SMPD1[names(variant_IVsets)], y = variant_IVsets, SIMPLIFY = FALSE)) |>
+  dplyr::mutate(chr.exposure = ifelse(grepl("rs", SNP), sub(":.*","",variant), chr.exposure),
+                pos.exposure = ifelse(grepl("rs", SNP), sub(".*:(.*)_.*_.*","\\1",variant), pos.exposure),
+                SNP = toupper(ifelse(grepl("rs", SNP), variant, SNP))) |>
+  dplyr::arrange(pos.exposure) |>
+  dplyr::filter(duplicated(SNP) == FALSE)
+
+wrs_SMPD1_all <- t(apply(ivs_SMPD1_all, MARGIN = 1, function(x){
+  TwoSampleMR::mr_wald_ratio(b_exp = as.numeric(x["beta.exposure"]),
+                             b_out = as.numeric(x["beta.outcome"]), 
+                             se_exp = as.numeric(x["se.exposure"]),
+                             se_out = as.numeric(x["se.outcome"])) |> unlist()
+}))
+colnames(wrs_SMPD1_all) <- paste0("wald_ratio_", colnames(wrs_SMPD1_all))
+wrs_SMPD1_all <- cbind(ivs_SMPD1_all, wrs_SMPD1_all)
+
+# Full SNP information including aa coding changes:
+deets_SMPD1 <- data.table::fread(file.path(data_dir,"sumstats/proteomics/SMPD1snps_allchr11.txt")) |>
+  dplyr::mutate(SNP_join = gsub("-","_",sub("-",":",Variant)))
+
+wrs_SMPD1_all <- left_join(wrs_SMPD1_all, 
+                           deets_SMPD1[,c("SNP_join","cDNA change","Amino acid change","Exon rank","ANNOTATION")],
+                           by = c("SNP" = "SNP_join"))
+
+
+# ivs = harmonised SNP data with appendend wald ratios and variant details
+plot_forest_snps <- function(iv_effects){
+  iv_effects$SNP_name = paste0("chr",sub("_.*","",iv_effects$SNP),"\n",iv_effects$`Amino acid change`)
+  
+  f1 <- ggplot(iv_effects, aes(x = SNP_name, y = beta.exposure, colour = IV_set)) +
+    geom_hline(yintercept = 0, lty = 2) +
+    geom_point(size = 2.5) +
+    geom_errorbar(aes(ymin = beta.exposure - 1.96*se.exposure,
+                      ymax = beta.exposure + 1.96*se.exposure), width = 0.3) +
+    scale_colour_manual(values = cols_IVsets) +
+    theme_minimal() +
+    theme(axis.text.x = element_blank(), legend.position = "none") +
+    labs(x = "", y = "Bx")
+  
+  f2 <- ggplot(iv_effects, aes(x = SNP_name, y = beta.outcome, colour = IV_set)) +
+    geom_hline(yintercept = 0, lty = 2) +
+    geom_point(size = 2.5) +
+    geom_errorbar(aes(ymin = beta.outcome - 1.96*se.outcome,
+                      ymax = beta.outcome + 1.96*se.outcome), width = 0.3) +
+    scale_colour_manual(values = cols_IVsets) +
+    theme_minimal() +
+    theme(axis.text.x = element_blank(), legend.position = "none") +
+    labs(x = "", y = "By")
+  
+  f3 <- ggplot(iv_effects, aes(x = SNP_name, y = wald_ratio_b, colour = IV_set)) +
+    geom_hline(yintercept = 0, lty = 2) +
+    geom_point(size = 2.5) +
+    geom_errorbar(aes(ymin = wald_ratio_b - 1.96*wald_ratio_se,
+                      ymax = wald_ratio_b + 1.96*wald_ratio_se), width = 0.3) +
+    scale_colour_manual(values = cols_IVsets) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none") +
+    labs(x = "", y = "By/Bx")
+  
+  gridExtra::grid.arrange(f1, f2, f3, heights = c(0.26,0.26,0.48))
+}
+
+plot_forest_snps(iv_effects = wrs_SMPD1_all)
+
+```
+
+```{r}
+#| label: SMPD1-geneview
+#| fig.width: 18
+#| fig.height: 3
+
+genome_axis <- GenomeAxisTrack()
+# MANE-select transcripts
+mane_ensembl <- rtracklayer::import(file.path(data_dir, "MANE.GRCh38.v1.5.ensembl_genomic.gtf.gz"))
+
+plot_genomefeatures <- function(chr, regionstart, regionstop, marker_positions){
+  
+  region <- GRanges(seqnames = chr, ranges = IRanges(regionstart, regionstop))
+  # Extract reference annotations in region
+  mane_region <- mane_ensembl[mane_ensembl %over% region]
+  mane_region <- mane_region[mcols(mane_region)$type == "exon"]
+  mane_region <- data.frame(mane_region) |> 
+    dplyr::arrange(start) |>
+    dplyr::mutate(fill = ifelse(gene_name == "SMPD1", "red", "grey80"))
+  
+  # Genome ranges
+  grtrack <- GeneRegionTrack(
+    mane_region,
+    chromosome = chr,
+    name = "Gene Model",
+    transcript = "transcript_id",
+    exon = "exon_id",
+    gene = "gene_id",
+    symbol = "gene_name",
+    stacking = "full",
+    collapseTranscripts = FALSE,
+    showId = FALSE,
+    fill = mane_region$fill
+  )
+  
+  displayPars(gene_track) <- list(
+    transcriptAnnotation = "transcript_id",
+    just.group = "above")
+  
+  # Convert to snp positons to GRanges object
+  snp_gr <- GRanges(
+    seqnames = marker_positions$chr,
+    ranges = IRanges(start = marker_positions$pos, width = 1))
+  
+  # SNP annotation track
+  snptrack <- AnnotationTrack(
+    snp_gr,
+    name = "SNPs",
+    shape = "box",
+    stacking = "dense")
+  
+  plotTracks(list(genome_axis, grtrack, snptrack), from = regionstart, to = regionstop)
+}
+
+iv_positions = data.frame(chr = "chr11",
+                          pos = as.numeric(wrs_SMPD1_all$pos.exposure))
+
+# Zoom out
+plot_genomefeatures(chr = "chr11", regionstart = 6350000, regionstop = 6400000, marker_positions = iv_positions)
+
+## Need to figure out what the hell is going on here!
+
+
+```
+
 
 ## Allelic series
 
