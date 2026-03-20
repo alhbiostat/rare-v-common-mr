@@ -1,6 +1,7 @@
 # Date: 20-02-2026
 # Author: A.L.Hanson
-# Purpose: Write out list of rare variant instruments from which to derive LD matrices using UKB WES data
+# Purpose: Write out list of rare/common variant instruments from which to derive LD matrices/
+# perform varaint pruning using UKB WES data
 
 # Load environment variables
 dotenv::load_dot_env(file = "config.env")
@@ -24,6 +25,12 @@ dat_rare_top <- lapply(dat, function(x){
   dplyr::filter(P <= 5e-8)
 })
 
+# Filter to common variants ExWAS P<=5e-8
+dat_common <- lapply(dat, function(x){
+  x |> dplyr::filter(EAF >= 0.01 & EAF <= 0.99) |>
+  dplyr::filter(P <= 5e-8)
+})
+
 # Merge variants, filter to unique and order
 merged <- do.call("rbind", dat_rare) |>
   dplyr::select("Variant", "CHR", "BP", "EAF", "Situated_gene" = "GENE", "Instrumented_protein" = "protein_target", "cis_trans") |>
@@ -33,5 +40,10 @@ merged_top <- do.call("rbind", dat_rare_top) |>
   dplyr::select("Variant", "CHR", "BP", "EAF", "Situated_gene" = "GENE", "Instrumented_protein" = "protein_target", "cis_trans") |>
   dplyr::arrange(CHR, BP)
 
+merged_common <- do.call("rbind", dat_common) |>
+  dplyr::select("Variant", "CHR", "BP", "EAF", "Situated_gene" = "GENE", "Instrumented_protein" = "protein_target", "cis_trans") |>
+  dplyr::arrange(CHR, BP)
+
 data.table::fwrite(merged, file = file.path(data_dir,"sumstats/proteomics/exome/rareinstruments_p1e-4.tsv"), sep = "\t")
 data.table::fwrite(merged_top, file = file.path(data_dir,"sumstats/proteomics/exome/rareinstruments_p5e-8.tsv"), sep = "\t")
+data.table::fwrite(merged_common, file = file.path(data_dir,"sumstats/proteomics/exome/commoninstruments_p5e-8.tsv"), sep = "\t")
