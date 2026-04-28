@@ -27,7 +27,6 @@ library(gridExtra)
 library(Gviz)
 library(GenomicRanges)
 
-
 dotenv::load_dot_env(file = here("config.env"))
 data_dir <- Sys.getenv("data_dir")
 res_dir <- Sys.getenv("results_dir")
@@ -219,7 +218,9 @@ unpruned_IVsets <- c("dhindsa_exwas_mask_ptv" = "mask:pLOF",
                     "sun_gwas_variant_common_clumped" = "genome:common")
 
 # Varaint and gene mask comparison for manuscript
-paper_IVsets <- c("dhindsa_exwas_mask_ptvraredmg" = "mask:pLOF|miss",
+paper_IVsets <- c(#"dhindsa_exwas_mask_ptv" = "mask:pLOF",
+                  #"dhindsa_exwas_mask_raredmg" = "mask:miss",
+                  "dhindsa_exwas_mask_ptvraredmg" = "mask:pLOF|miss",
                   "dhindsa_exwas_variant_ultrarare_pruned" = "exome:ultrarare",
                   "dhindsa_exwas_variant_rare_pruned" = "exome:rare",
                   "dhindsa_exwas_variant_common" = "exome:common",
@@ -249,6 +250,10 @@ harmonised_snps_relaxed <- lapply(harmonised_snps_relaxed, function(x){lapply(x,
 #save(harmonised_snps_relaxed, file = file.path(data_dir, "harmonised/harmonised_studies_GW5e-08_EW1e-04_rarepruned_COMBINED.rda"))
 
 # --------------------------------------------------------------------------------------- #
+# Full SNP details for exome varaints
+wes_deets <- data.table::fread(file.path(data_dir, "sumstats/proteomics/proteins_dhindsa_pQTL_annotations.tsv"))
+# --------------------------------------------------------------------------------------- #
+
 # Variables and aesthetics
 
 n_genes <- length(harmonised_snps[[1]]) # 2937
@@ -261,7 +266,7 @@ n_proteins <- length(res_MR[[1]])
 alpha <- signif(0.05/n_proteins,2)
 
 # IVsets
-cols_IVsets <- c("darkorchid4","darkorchid3","darkorchid2","orchid",
+cols_IVsets <- c("magenta4","magenta3","mediumorchid","pink",
                  "steelblue4","steelblue1","darkorange2","orange")
 names(cols_IVsets) <- IVsets
 
@@ -277,6 +282,16 @@ geneinfo_olink <- data.table::fread(file.path(data_dir, "sumstats/proteomics/oli
   dplyr::mutate(
     gene_biotype = "protein_coding",
     gene = `Gene symbol`)
+
+# Split mutigene rows
+geneinfo_olink <- geneinfo_olink %>%
+  tidyr::separate_longer_delim(3, delim = "_") %>%
+  tidyr::separate_longer_delim(c(5:9, 11), delim = ";") |>
+  dplyr::filter(`Assay Target` == `Gene symbol`)
+
+# High LD regions
+# Sourced from: https://genome.sph.umich.edu/wiki/Regions_of_high_linkage_disequilibrium_%28LD%29
+highld_regions <- data.table::fread(file.path(data_dir, "highld_hg38.txt"))
 
 ```
 
@@ -336,6 +351,9 @@ p1 <- mapply(FUN = function(x,y){
 }, x = list(num_IVs,num_IVs), y = c("cis","trans"), SIMPLIFY = FALSE)
 
 gridExtra::grid.arrange(grobs = p1)
+
+# Manuscript values:
+num_IVs |> dplyr::filter(outcome == "BMI") |> group_by(IV_set, cis_trans) |> summarise(mean_transIVs = mean(value)) |> knitr::kable(digits = 3)
 ```
 
 A GWS theshold for significance is strict for rare variants, which must exhibit very strong effects in order to be detected despite their low minor allele frequency in the population. If this theshold is relaxed (for rare and ultrarare variants only), are more cis and trans IVs available, or common variants continue to show more protein associations in trans?
@@ -388,6 +406,9 @@ p1.2 <- mapply(FUN = function(x,y){
 }, x = list(num_IVs_relaxed,num_IVs_relaxed), y = c("cis","trans"), SIMPLIFY = FALSE)
 
 gridExtra::grid.arrange(grobs = p1.2)
+
+# Manuscript values:
+num_IVs_relaxed |> dplyr::filter(outcome == "BMI") |> group_by(IV_set, cis_trans) |> summarise(mean_IVs = mean(value), sum_IVs = sum(value)) |> knitr::kable(digits = 3)
 ```
 
 
@@ -422,11 +443,11 @@ avail_IVs <- num_IVs |> group_by(IV_set, cis_trans, outcome) |>
 # Plot
 p2 <- sapply(c("cis","trans"), function(x){
   avail_IVs |>
-    dplyr::filter(IV_set %in% names(variant_IVsets) & cis_trans == x) |>
-    dplyr::mutate(labels = factor(variant_IVsets[IV_set], levels = variant_IVsets)) |>
+    dplyr::filter(IV_set %in% names(paper_IVsets) & cis_trans == x) |>
+    dplyr::mutate(labels = factor(paper_IVsets[IV_set], levels = paper_IVsets)) |>
     ggplot(aes(x = labels)) +
     facet_grid(.~outcome) +
-    geom_col(aes(y = prop_prots_1IV*100, colour = labels), fill = "white", width = 0.8) +
+    geom_col(aes(y = prop_prots_1IV*100, colour = labels), fill = "white", width = 0.8, lwd = 0.8) +
     geom_col(aes(y = prop_prots_3IV*100, fill = labels), width = 0.8) +
     scale_y_continuous(limits = c(0,100)) +
     scale_fill_manual(values = cols_IVsets) +
@@ -440,6 +461,9 @@ p2 <- sapply(c("cis","trans"), function(x){
          title = paste0("Percentage of plasma proteins with ",x, "-IV sets available (with n>=1 or >=3 instruments; p<5e-8)"))}, simplify = FALSE)
   
 gridExtra::grid.arrange(grobs = p2)
+
+# Manuscript values:
+avail_IVs |> group_by(IV_set, cis_trans) |> summarise(max(n_prots_1IV), max(prop_prots_1IV), max(n_prots_3IV), max(prop_prots_3IV)) |> knitr::kable(digits = 3)
 ```
 
 Repeat with relaxed thresholding for rare variants:
@@ -460,11 +484,11 @@ avail_IVs_relaxed <- num_IVs_relaxed |> group_by(IV_set, cis_trans, outcome) |>
 # Plot
 p2.2 <- sapply(c("cis","trans"), function(x){
   avail_IVs_relaxed |>
-    dplyr::filter(IV_set %in% names(variant_IVsets) & cis_trans == x) |>
-    dplyr::mutate(labels = factor(variant_IVsets[IV_set], levels = variant_IVsets)) |>
+    dplyr::filter(IV_set %in% names(paper_IVsets) & cis_trans == x) |>
+    dplyr::mutate(labels = factor(paper_IVsets[IV_set], levels = paper_IVsets)) |>
     ggplot(aes(x = labels)) +
     facet_grid(.~outcome) +
-    geom_col(aes(y = prop_prots_1IV*100, colour = labels), fill = "white", width = 0.8) +
+    geom_col(aes(y = prop_prots_1IV*100, colour = labels), fill = "white", width = 0.8, lwd = 0.8) +
     geom_col(aes(y = prop_prots_3IV*100, fill = labels), width = 0.8) +
     scale_y_continuous(limits = c(0,100)) +
     scale_fill_manual(values = cols_IVsets) +
@@ -479,6 +503,12 @@ p2.2 <- sapply(c("cis","trans"), function(x){
   
 gridExtra::grid.arrange(grobs = p2.2)
 
+# Manuscript values:
+avail_IVs_relaxed |> group_by(IV_set, cis_trans) |> summarise(max(n_prots_1IV), max(prop_prots_1IV), max(n_prots_3IV), max(prop_prots_3IV)) |> knitr::kable(digits = 3)
+
+# Rare cis-IVs gained?
+num_IVs_relaxed |> dplyr::filter(IV_set == "dhindsa_exwas_variant_rare_pruned", cis_trans == "cis", outcome == "BMI") |> pull(value) |> sum() #11717
+num_IVs |> dplyr::filter(IV_set == "dhindsa_exwas_variant_rare_pruned", cis_trans == "cis", outcome == "BMI") |> pull(value) |> sum() #6155
 ```
 
 **Instrument overlap**
@@ -487,7 +517,7 @@ What is the overlap in the proteins that have at least 1 IV across instrument se
 
 ```{r}
 #| label: instrument overlap
-#| fig.width: 6
+#| fig.width: 6.5
 #| fig.height: 3
 
 num_IVs$protein <- sub("_.*","",num_IVs$name)
@@ -495,6 +525,17 @@ num_IVs$protein <- sub("_.*","",num_IVs$name)
 upset_cis <- list(
   "exome:rare" = num_IVs |> 
     dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_variant_rare_pruned" & cis_trans == "cis") |> 
+    dplyr::pull(protein),
+  "ex/genome:common" = num_IVs |> 
+    dplyr::filter(outcome == "BMI" & IV_set %in% c("dhindsa_exwas_variant_common", "sun_gwas_variant_common_clumped") & cis_trans == "cis") |>
+    dplyr::pull(protein) |> unique())
+
+upset_cis_mask <- list(
+  "exome:rare" = num_IVs |> 
+    dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_variant_rare_pruned" & cis_trans == "cis") |> 
+    dplyr::pull(protein),
+  "exome:mask" = num_IVs |> 
+    dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_mask_ptvraredmg" & cis_trans == "cis") |> 
     dplyr::pull(protein),
   "ex/genome:common" = num_IVs |> 
     dplyr::filter(outcome == "BMI" & IV_set %in% c("dhindsa_exwas_variant_common", "sun_gwas_variant_common_clumped") & cis_trans == "cis") |>
@@ -510,6 +551,7 @@ upset_trans <- list(
 
 # Upset plots
 upset(fromList(upset_cis), order.by = "freq", text.scale = 1.5, mainbar.y.label = "cis-instrumented \nproteins (P<5e-8)")
+upset(fromList(upset_cis_mask), order.by = "freq", text.scale = 1.5, mainbar.y.label = "cis-instrumented \nproteins (P<5e-8)")
 upset(fromList(upset_trans), order.by = "freq", text.scale = 1.5, mainbar.y.label = "trans-instrumented \n proteins (P<5e-8)")
 
 num_IVs_relaxed$protein <- sub("_.*","",num_IVs_relaxed$name)
@@ -517,6 +559,17 @@ num_IVs_relaxed$protein <- sub("_.*","",num_IVs_relaxed$name)
 upset_cis_relaxed <- list(
   "exome:rare" = num_IVs_relaxed |> 
     dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_variant_rare_pruned" & cis_trans == "cis") |> 
+    dplyr::pull(protein),
+  "ex/genome:common" = num_IVs_relaxed |> 
+    dplyr::filter(outcome == "BMI" & IV_set %in% c("dhindsa_exwas_variant_common", "sun_gwas_variant_common_clumped") & cis_trans == "cis") |>
+    dplyr::pull(protein) |> unique())
+
+upset_cis_mask_relaxed <- list(
+  "exome:rare" = num_IVs_relaxed |> 
+    dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_variant_rare_pruned" & cis_trans == "cis") |> 
+    dplyr::pull(protein),
+  "exome:mask" = num_IVs_relaxed |> 
+    dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_mask_ptvraredmg" & cis_trans == "cis") |> 
     dplyr::pull(protein),
   "ex/genome:common" = num_IVs_relaxed |> 
     dplyr::filter(outcome == "BMI" & IV_set %in% c("dhindsa_exwas_variant_common", "sun_gwas_variant_common_clumped") & cis_trans == "cis") |>
@@ -532,6 +585,7 @@ upset_trans_relaxed <- list(
 
 # Upset plots
 upset(fromList(upset_cis_relaxed), order.by = "freq", text.scale = 1.5, mainbar.y.label = "cis-instrumented \n proteins \n P<5e-8 common \n P<1e-4 rare")
+upset(fromList(upset_cis_mask_relaxed), order.by = "freq", text.scale = 1.5, mainbar.y.label = "cis-instrumented \n proteins \n P<5e-8 common \n P<1e-4 rare")
 upset(fromList(upset_trans_relaxed), order.by = "freq", text.scale = 1.5, mainbar.y.label = "trans-instrumented \n proteins \n P<5e-8 common \n P<1e-4 rare")
 
 ```
@@ -549,44 +603,51 @@ First pull the pQTL associations for each IV set into a consistant format:
 
 # Pull exposure associations from harmonised SNP sets
 
-# pqtls <- lapply(seq_len(n_genes), function(gene){
-#   out <- lapply(seq_len(n_IVsets), function(set){
-# 
-#     dfs <- lapply(harmonised_snps, function(x){
-#       df <- x[[gene]][[set]]
-#       if("gene.outcome" %in% colnames(df)){
-#         df$gene <- df$gene.outcome
-#       }else{df$gene <- toupper(df$SNP)}
-#       
-#       if(!("chr.exposure" %in% colnames(df))){
-#         df$chr.exposure = sub(":.*","",df$variant)
-#         df$pos.exposure = sub(".*:(.*)_.*_.*","\\1",df$variant)
-#       }
-# 
-#       df <- df |> dplyr::select(SNP,
-#                                 CHR = chr.exposure,
-#                                 POS = pos.exposure,
-#                                 EA = effect_allele.exposure,
-#                                 OA = other_allele.exposure,
-#                                 EAF = eaf.exposure,
-#                                 beta = beta.exposure,
-#                                 P = pval.exposure,
-#                                 exposure,
-#                                 cis_trans,
-#                                 proximal_gene = gene)
-#       return(df)
-#     })
-# 
-#     dfs_join <- do.call("rbind", dfs) |> unique()
-#     rownames(dfs_join) <- NULL
-#     dfs_join
-#   })
-#   names(out) <- names_IVsets
-#   out
-# })
-# names(pqtls) <- names_genes
+pull_pqtls <- function(snpset, IVsetnames) {
+  lapply(seq_len(n_genes), function(gene){
+  out <- lapply(IVsetnames, function(set){
 
+    dfs <- lapply(snpset, function(x){
+      df <- x[[gene]][[set]]
+      if("gene.outcome" %in% colnames(df)){
+        df$gene <- df$gene.outcome
+      }else{df$gene <- toupper(df$SNP)}
+
+      if(!("chr.exposure" %in% colnames(df))){
+        df$chr.exposure = sub(":.*","",df$variant)
+        df$pos.exposure = sub(".*:(.*)_.*_.*","\\1",df$variant)
+      }
+
+      df <- df |> dplyr::select(SNP,
+                                CHR = chr.exposure,
+                                POS = pos.exposure,
+                                EA = effect_allele.exposure,
+                                OA = other_allele.exposure,
+                                EAF = eaf.exposure,
+                                beta = beta.exposure,
+                                se = se.exposure,
+                                P = pval.exposure,
+                                exposure,
+                                cis_trans,
+                                proximal_gene = gene)
+      return(df)
+    })
+
+    dfs_join <- do.call("rbind", dfs) |> unique()
+    rownames(dfs_join) <- NULL
+    dfs_join
+  })
+  names(out) <- IVsetnames
+  out
+})}
+  
+#pqtls <- pull_pqtls(snpset = harmonised_snps, IVsetnames = IV_sets)
+#names(pqtls) <- names_genes
 #save(pqtls, file = file.path(data_dir,"sumstats/proteomics/protein_pQTLs_5e-08.rda"))
+
+# pqtls_relaxed <- pull_pqtls(snpset = harmonised_snps_relaxed, IVsetnames = IV_sets)
+# names(pqtls_relaxed) <- names_genes
+# save(pqtls_relaxed, file = file.path(data_dir,"sumstats/proteomics/protein_pQTLs_5e-08GW_1e-04EW.rda"))
 
 load(file = file.path(data_dir,"sumstats/proteomics/protein_pQTLs_5e-08.rda")) #pqtls
 # 
@@ -621,12 +682,12 @@ load(file = file.path(data_dir,"sumstats/proteomics/protein_pQTLs_5e-08.rda")) #
 #| fig.height: 4
 #| fig.width: 12
 
-pqtls_joined <- sapply(names(unpruned_IVsets), function(x){do.call(rbind, lapply(pqtls, `[[`, x))} |> na.exclude(), simplify = F)
+pqtls_joined <- sapply(names(IVsets), function(x){do.call(rbind, lapply(pqtls, `[[`, x))} |> na.exclude(), simplify = F)
 # Retain LD pruned rare variants
-pqtls_joined$dhindsa_exwas_variant_rare <- pqtls_joined$dhindsa_exwas_variant_rare |> dplyr::filter(SNP %in% prunein)
-pqtls_joined$dhindsa_exwas_variant_ultrarare <- pqtls_joined$dhindsa_exwas_variant_ultrarare |> dplyr::filter(SNP %in% prunein)
-names(pqtls_joined)[grep("dhindsa_exwas_variant_rare", names(pqtls_joined))] <- "dhindsa_exwas_variant_rare_pruned"
-names(pqtls_joined)[grep("dhindsa_exwas_variant_ultrarare", names(pqtls_joined))] <- "dhindsa_exwas_variant_ultrarare_pruned"
+#pqtls_joined$dhindsa_exwas_variant_rare <- pqtls_joined$dhindsa_exwas_variant_rare |> dplyr::filter(SNP %in% prunein)
+#pqtls_joined$dhindsa_exwas_variant_ultrarare <- pqtls_joined$dhindsa_exwas_variant_ultrarare |> dplyr::filter(SNP %in% prunein)
+#names(pqtls_joined)[grep("dhindsa_exwas_variant_rare", names(pqtls_joined))] <- "dhindsa_exwas_variant_rare_pruned"
+#names(pqtls_joined)[grep("dhindsa_exwas_variant_ultrarare", names(pqtls_joined))] <- "dhindsa_exwas_variant_ultrarare_pruned"
 
 pqtls_joined_variants <- do.call("rbind", pqtls_joined[grep("variant", names(pqtls_joined))]) |>
   tibble::rownames_to_column("IV_set") |>
@@ -658,49 +719,73 @@ gridExtra::grid.arrange(p3,p4,nrow = 1, widths = c(0.18,0.75), top = "Observed e
 ```{r}
 #| label: instrument-strength-split
 #| fig.height: 3.5
-#| fig.width: 6
+#| fig.width: 5
 
-# Split cis and trans effects
+## Gene masks
+pqtls_joined_masks <- do.call("rbind", pqtls_joined[grep("dhindsa_exwas_mask_ptvraredmg", names(pqtls_joined))]) |>
+  tibble::rownames_to_column("IV_set") |>
+  dplyr::mutate(IV_set = sub("\\..*","",IV_set),
+                cis_trans_true = ifelse(proximal_gene == toupper(exposure), "true_cis", cis_trans))
+
+# Split variant cis and trans effects
 pqtls_joined_variants |> 
   dplyr::filter(!(cis_trans_true == "")) |>
-  dplyr::mutate(label = factor(IVsets[IV_set], levels = IVsets),
-                cis_trans_true = factor(cis_trans_true, levels = c("trans","cis","true_cis"))) |>
+  dplyr::mutate(cis_trans_true = factor(cis_trans_true, levels = c("trans","cis","true_cis"))) |>
+  rbind(pqtls_joined_masks) |>
+  dplyr::mutate(label = factor(IVsets[IV_set], levels = IVsets)) |> 
   ggplot(aes(x = cis_trans_true, y = abs(beta), fill = label)) +
   facet_grid(.~label, scale = "free", space = "free") +
   geom_boxplot() +
   scale_fill_manual(values = cols_IVsets) +
-  scale_x_discrete(labels = c("trans","proximal \ncis", "true \ncis")) +
+  #scale_x_discrete(labels = c("trans","proximal \ncis", "true \ncis")) +
   theme_minimal() +
   theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) +
   labs(x = "", y = "Instrument |exposure beta|", title = "Effect size of IVs (P<5e-8)")
 
+# Cis only
+pqtls_joined_variants |> 
+  dplyr::filter(!(cis_trans_true == "")) |>
+  dplyr::mutate(cis_trans_true = factor(cis_trans_true, levels = c("trans","cis","true_cis"))) |>
+  rbind(pqtls_joined_masks) |>
+  dplyr::mutate(label = factor(IVsets[IV_set], levels = IVsets)) |> 
+  dplyr::filter(cis_trans_true != "trans") |>
+  ggplot(aes(x = cis_trans_true, y = abs(beta), fill = label)) +
+  facet_grid(.~label, scale = "free", space = "free") +
+  geom_boxplot() +
+  scale_fill_manual(values = cols_IVsets) +
+  scale_x_discrete(labels = c("cis" = "proximal \ncis", "true_cis" = "true \ncis")) +
+  theme_minimal() +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) +
+  labs(x = "", y = "Instrument |exposure beta|", title = "Effect size of IVs (P<5e-8)")
+
+
 ```
+
+**Instrument F statisitics**
+[ADD]
 
 What is the cis effect of trans variants on the genes that they are situated in (for WES variants) or near (common variants)? That is, do all trans variants have a cis effect? 
 
 ### Pleiotropy profiles
 
-**Cis and trans plieotropy profiles**
-
 On average, how many molecular traits (protein levels) does a variant significantly associate with across instrument sets (e.g. ultra-rare, rare, common)?
 
-To assess the pleiotropy profiles of variants in each IV set, all significant pQTL associations reported with a given variant (p\<=5e-8; or p<=1e-4 for rare varaints at a relaxed threshod) were extracted from the O-link protein GWAS/ExWAS summary statistics.
+To assess the pleiotropy profiles of variants in each IV set, all significant pQTL associations reported with a given variant (p\<=5e-8; or p<=1e-4 for rare varaints at a relaxed threshod) were extracted from the O-link protein GWAS/ExWAS summary statistics. LD pruning was then performed across all varaints - such that the variants used here may differ from the exct variants used in subsequent MR (which were pruned within (not between) each IV set)
 
 ```{r}
 #| label: pleiotropy-matrix
 
 lookup_files <- list.files(file.path(data_dir, "sumstats/proteomics"), pattern = "pQTL_lookup_*", full.names = TRUE)
 
-lookup_masks_files <- list.files(file.path(data_dir, "sumstats/proteomics"), pattern = "pQTL_lookup_dhindsa_exwas_mask_*", full.names = TRUE)
-lookup_exome_files <- list.files(file.path(data_dir, "sumstats/proteomics"), pattern = "pQTL_lookup_dhindsa_exwas_variant_*", full.names = TRUE)
-lookup_genome_files <- list.files(file.path(data_dir, "sumstats/proteomics"), pattern = "pQTL_lookup_sun_gwas_variant_*", full.names = TRUE)
+#lookup_masks_files <- list.files(file.path(data_dir, "sumstats/proteomics"), pattern = "pQTL_lookup_dhindsa_exwas_mask_*", full.names = TRUE)
+#lookup_exome_files <- list.files(file.path(data_dir, "sumstats/proteomics"), pattern = "pQTL_lookup_dhindsa_exwas_variant_*", full.names = TRUE)
+#lookup_genome_files <- list.files(file.path(data_dir, "sumstats/proteomics"), pattern = "pQTL_lookup_sun_gwas_variant_*", full.names = TRUE)
 
-# Pleiotropy matrices (for each IV set)
-# How many proteins do IVs associated with?
+# Read in exposure IVs
 lookup_pQTLs <- lapply(lookup_files, function(x){data.table::fread(x)})
 names(lookup_pQTLs) <- sub(".*pQTL_lookup_(.*)\\.tsv","\\1",lookup_files)
 
-# Format to keep significant variant-protein associations
+# Format
 lookup_pQTLs <- lapply(lookup_pQTLs, function(x){
   x <- as.data.frame(x)
   if(!("GENE" %in% colnames(x))){x$GENE <- NA}
@@ -710,17 +795,26 @@ lookup_pQTLs <- lapply(lookup_pQTLs, function(x){
                     proximal_gene = x$GENE,
                     pvalue = x[,which(colnames(x) %in% c("P","pValue"))],
                     cis_trans = x$cis_trans) |>
-    dplyr::arrange(variant) |>
+    dplyr::arrange(variant, pvalue) |>
+    dplyr::filter(duplicated(paste(variant,protein_target)) == FALSE) |>
   unique()
   
   return(out)})
 
-# Retain LD pruned common variants
+# Retain LD pruned common variants (such that all SNPs in pleiotropy analysis are independent)
 lookup_pQTLs$sun_gwas_variant_common_clumped <- lookup_pQTLs$sun_gwas_variant_common_clumped |>
-  dplyr::filter(variant %in% prunein_gwas)
+ dplyr::filter(variant %in% prunein_gwas)
 
 lookup_pQTLs$dhindsa_exwas_variant_common <- lookup_pQTLs$dhindsa_exwas_variant_common |>
-  dplyr::filter(variant %in% gsub(":","-",prunein_exwas))
+dplyr::filter(variant %in% gsub(":","-",prunein_exwas))
+
+# Retain common variants that are used as instruments (LD pruned within each set)
+# I don't think this is what I want to do - there may not be overlap in the variants retained after pruning of differet gene IVs (i.e a cis variant for gene 1 has a trans effect on gene 2, but another variant in LD has been retained as the gene 2 trans instument)
+# gwas_common_IVs <- do.call("rbind", lapply(harmonised_snps$BMI, function(x){
+#   df <- x[["sun_gwas_variant_common_clumped"]]
+#   if(!("variant" %in% colnames(df))){df$variant = NA}
+#   df[c("exposure","variant")]})) |> na.exclude()
+# lookup_pQTLs$sun_gwas_variant_common_clumped <- lookup_pQTLs$sun_gwas_variant_common_clumped |> dplyr::filter(variant %in% gwas_common_IVs)
 
 # Relaxed theshold for rare variants (P<1e-4)
 lookup_pQTLs_relaxed <- lapply(lookup_pQTLs, function(x){
@@ -764,99 +858,76 @@ lookup_pQTLs_relaxed <- lapply(lookup_pQTLs_relaxed, function(x){
   return(x)
 })
 
+# For gene masks - reassign cis/trans calls to match the method used for varaints (+-1Mb from gene start site)
+# Currently only masks for the encoded protein are considered cis (considered these instead as "true_cis" below)
+lookup_pQTLs_relaxed[grepl("mask", names(lookup_pQTLs_relaxed))] <- lapply(lookup_pQTLs_relaxed[grepl("mask", names(lookup_pQTLs_relaxed))], function(x){
+  x$proximal_gene = x$variant
+  
+  for(i in 1:nrow(x)){
+    if(x$proximal_gene[i] %in% geneinfo$gene){
+      prox_gene_chr = as.character(geneinfo[geneinfo$gene == x$proximal_gene[i],"chr"])
+      prox_gene_range = geneinfo[geneinfo$gene == x$proximal_gene[i],c("start","stop")]
+      prot_gene_chr = as.character(geneinfo_olink[geneinfo_olink$gene == x$protein_target[i],"chr"])
+      prot_gene_start = as.numeric(geneinfo_olink[geneinfo_olink$gene == x$protein_target[i],"start"])
+      
+      prot_gene_cisrange = c(start = prot_gene_start - 1000000, stop = prot_gene_start + 1000000)
+      
+      in_cis <- prox_gene_chr == prot_gene_chr & 
+        ((prox_gene_range["start"] > prot_gene_cisrange["start"] & prox_gene_range["start"] < prot_gene_cisrange["stop"]) |
+           (prox_gene_range["stop"] > prot_gene_cisrange["start"] & prox_gene_range["stop"] < prot_gene_cisrange["stop"])) |> as.logical()
+      
+      x$cis_trans[i] = ifelse(in_cis, "cis","trans")
+      x$proximal_gene_chr[i] = prox_gene_chr
+    } else {x$cis_trans[i] = NA}}
+  return(x)
+})
+
 # Summarise associations per variant (pQTL)
 pQTLs_assocs <- mapply(function(x, y){
   x <- x |> dplyr::group_by(variant, proximal_gene) |> 
     dplyr::summarise(n_assocs = n(), 
                      n_cis = length(which(cis_trans == "cis")),
-                     n_trans = length(which(cis_trans == "trans")))
+                     n_truecis = sum(proximal_gene == paste0("'",protein_target,"'")),
+                     n_trans = length(which(cis_trans == "trans")),
+                     assoc_genes = paste(unique(protein_target), collapse = ";"),
+                     assoc_cis_genes = paste(unique(protein_target[cis_trans == "cis"]), collapse = ";"),
+                     assoc_trans_genes = paste(unique(protein_target[cis_trans == "trans"]), collapse = ";"))
   x$IV_set <- y
   return(x)
 }, x = lookup_pQTLs, y = as.list(names(lookup_pQTLs)), SIMPLIFY = F)
 
 # Summarise the number of cis and trans genes each variant associates with
 pQTLs_assocs_relaxed <- mapply(function(x, y){
-  x <- x |> dplyr::group_by(variant, proximal_gene) |> 
-    dplyr::summarise(n_assocs = n(), 
-                     n_cis = length(which(cis_trans == "cis")),
-                     n_trans = length(which(cis_trans == "trans")))
+  if(grepl("variant",y)){
+    x <- x |> dplyr::group_by(variant, proximal_gene) |> 
+      dplyr::summarise(n_assocs = n(), 
+                       n_cis = length(which(cis_trans == "cis")),
+                       n_truecis = sum(proximal_gene == paste0("'",protein_target,"'")),
+                       n_trans = length(which(cis_trans == "trans")),
+                       assoc_genes = paste(unique(protein_target), collapse = ";"),
+                       assoc_cis_genes = paste(unique(protein_target[cis_trans == "cis"]), collapse = ";"),
+                       assoc_trans_genes = paste(unique(protein_target[cis_trans == "trans"]), collapse = ";"))
+  }
+  if(grepl("mask",y)){
+    x <- x |> dplyr::group_by(variant, proximal_gene) |> 
+      dplyr::summarise(n_assocs = n(), 
+                       n_cis = length(which(cis_trans == "cis")),
+                       n_truecis = sum(proximal_gene == protein_target),
+                       n_trans = length(which(cis_trans == "trans")),
+                       assoc_genes = paste(unique(protein_target), collapse = ";"),
+                       assoc_cis_genes = paste(unique(protein_target[cis_trans == "cis"]), collapse = ";"),
+                       assoc_trans_genes = paste(unique(protein_target[cis_trans == "trans"]), collapse = ";"))
+  }
   x$IV_set <- y
   return(x)
 }, x = lookup_pQTLs_relaxed, y = as.list(names(lookup_pQTLs_relaxed)), SIMPLIFY = F)
 
 ```
 
-```{r}
-#| label: cis-v-trans-pleiotropy
-#| fig.height: 4
-#| fig.width: 8
-
-pqtls_assocs_joined <- do.call("rbind", pQTLs_assocs) |>
-  dplyr::filter(grepl("variant",IV_set)) |>
-  dplyr::mutate(IV_set = factor(IVsets[IV_set], levels = IVsets)) |>
-  dplyr::group_by(IV_set) |> 
-  dplyr::mutate(label = ifelse(n_trans == max(n_trans) & grepl("exome",IV_set), paste(variant,proximal_gene), NA)) |> dplyr::ungroup()
-
-p5 <- pqtls_assocs_joined  |>
-  ggplot(aes(x = IV_set, y = n_assocs)) +
-  geom_boxplot(aes(fill = IV_set)) +
-  scale_fill_manual(values = cols_IVsets) +
-  scale_y_log10() +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 55, hjust = 1),
-        legend.position = "none") +
-  labs(x = "", y = "Number of pQTL associations")
-
-p6 <- pqtls_assocs_joined  |>
-  ggplot(aes(x = n_cis, y = n_trans, colour = IV_set)) +
-  facet_wrap(.~IV_set, nrow = 2) +
-  geom_point() +
-  ggrepel::geom_text_repel(aes(label = label), size = 3) +
-  scale_colour_manual(values = cols_IVsets) +
-  theme_minimal() +
-  theme(legend.position = "none") +
-  labs(x = "Number of cis-pQTL associations", y = "Number of trans-pQTL associations")
-
-gridExtra::grid.arrange(p5,p6,nrow = 1, widths = c(0.2,0.7), top = "Pleiotropy profile of IV sets (P<5e-8)")
-```
+*P-value distribtion of commmon and rare pQTLs*
 
 ```{r}
-#| label: cis-v-trans-pleiotropy-relaxed
-#| fig.height: 4
-#| fig.width: 8
-
-pqtls_assocs_joined_relaxed <- do.call("rbind", pQTLs_assocs_relaxed) |>
-  dplyr::filter(grepl("variant",IV_set)) |>
-  dplyr::mutate(IV_set = factor(IVsets[IV_set], levels = IVsets)) |>
-  dplyr::group_by(IV_set) |> 
-  dplyr::mutate(label = ifelse(n_trans == max(n_trans) & grepl("exome",IV_set), paste(variant,proximal_gene), NA)) |> dplyr::ungroup()
-
-p5.2 <- pqtls_assocs_joined_relaxed  |>
-  ggplot(aes(x = IV_set, y = n_assocs)) +
-  geom_boxplot(aes(fill = IV_set)) +
-  scale_fill_manual(values = cols_IVsets) +
-  scale_y_log10() +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 55, hjust = 1),
-        legend.position = "none") +
-  labs(x = "", y = "Number of pQTL associations")
-
-p6.2 <- pqtls_assocs_joined_relaxed  |>
-  ggplot(aes(x = n_cis, y = n_trans, colour = IV_set)) +
-  facet_wrap(.~IV_set, nrow = 2) +
-  geom_point() +
-  ggrepel::geom_text_repel(aes(label = label), size = 3) +
-  scale_colour_manual(values = cols_IVsets) +
-  theme_minimal() +
-  theme(legend.position = "none") +
-  labs(x = "Number of cis-pQTL associations", y = "Number of trans-pQTL associations")
-
-gridExtra::grid.arrange(p5.2,p6.2,nrow = 1, widths = c(0.2,0.7), top = "Pleiotropy profile of IV sets (common: P<5e-8; rare: P<1e-4)")
-
-```
-
-```{r}
-#| label: pleiotropy-vs-pval
+#| label: IV-pvals
 #| fig.height: 5
 #| fig.width: 6
 
@@ -878,75 +949,490 @@ do.call("rbind", lookup_pQTLs_relaxed_both[names(variant_IVsets)]) |>
   
 ```
 
+**Cis and trans plieotropy profiles**
+
+```{r}
+#| label: cis-v-trans-pleiotropy
+#| fig.height: 4
+#| fig.width: 7
+#| include: FALSE
+
+pqtls_assocs_joined <- do.call("rbind", pQTLs_assocs) |>
+  dplyr::filter(grepl("variant",IV_set)) |>
+  dplyr::mutate(IV_set = factor(IVsets[IV_set], levels = IVsets)) |>
+  dplyr::group_by(IV_set) |> 
+  dplyr::mutate(label = ifelse(n_trans == max(n_trans) & grepl("exome",IV_set), paste(variant,proximal_gene), NA)) |> dplyr::ungroup()
+
+# Filter to varaints that will be used as cis-IVs (at least 1 cis-pQTL association)
+p5 <- pqtls_assocs_joined  |> dplyr::filter(n_cis >= 1) |>
+  ggplot(aes(x = IV_set, y = n_assocs)) +
+  geom_boxplot(aes(fill = IV_set)) +
+  scale_fill_manual(values = cols_IVsets) +
+  scale_y_log10() +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 55, hjust = 1),
+        legend.position = "none") +
+  labs(x = "", y = "Number of pQTL associations")
+
+## Number of trans associations of each true-cis or proximal-cis pQTL
+# pqtls_assocs_joined |> 
+#   dplyr::filter(n_cis > 0 & !(is.na(n_truecis))) |>
+#   dplyr::mutate(x = paste(IV_set,n_truecis, sep = "_")) |>
+#   ggplot(aes(x = x, y = n_assocs)) +
+#   geom_boxplot(aes(fill = IV_set)) +
+#   scale_fill_manual(values = cols_IVsets) +
+#   scale_y_log10() +
+#   theme_minimal() +
+#   theme(axis.text.x = element_text(angle = 55, hjust = 1),
+#         legend.position = "none") +
+#   labs(x = "", y = "Number of pQTL associations")
+
+p6 <- pqtls_assocs_joined  |> dplyr::filter(n_cis >= 1) |>
+  ggplot(aes(x = n_cis, y = n_trans, colour = IV_set)) +
+  facet_wrap(.~IV_set, nrow = 2) +
+  geom_point() +
+  ggrepel::geom_text_repel(aes(label = label), size = 3) +
+  scale_colour_manual(values = cols_IVsets) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  labs(x = "Number of cis-pQTL associations", y = "Number of trans-pQTL associations")
+
+gridExtra::grid.arrange(p5,p6,nrow = 1, widths = c(0.2,0.7), top = "Pleiotropy profile of IV sets (P<5e-8)")
+```
+
+```{r}
+#| label: cis-v-trans-pleiotropy-relaxed
+#| fig.height: 4
+#| fig.width: 11
+
+# Variant pleiotropy profiles
+pqtls_assocs_joined_relaxed <- do.call("rbind", pQTLs_assocs_relaxed) |>
+  dplyr::filter(IV_set %in% names(paper_IVsets)) |>
+  dplyr::mutate(IV_set = factor(IVsets[IV_set], levels = IVsets)) |>
+  dplyr::group_by(IV_set) |> 
+  dplyr::mutate(label = ifelse(n_trans == max(n_trans) & grepl("exome",IV_set), paste(variant,proximal_gene), NA)) |> dplyr::ungroup()
+
+# Filter to varaints that will be used as cis-IVs (at least 1 cis-pQTL association)
+p5.2.1 <- pqtls_assocs_joined_relaxed  |> dplyr::filter(n_cis >= 1) |>
+  ggplot(aes(x = IV_set, y = n_assocs)) +
+  geom_boxplot(aes(fill = IV_set)) +
+  scale_fill_manual(values = cols_IVsets) +
+  scale_y_log10() +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 55, hjust = 1),
+        legend.position = "none") +
+  labs(x = "", y = "Number of pQTL associations\n per cis-IV")
+
+p5.2.2 <- pqtls_assocs_joined_relaxed  |> dplyr::filter(n_cis >= 1) |>
+  ggplot(aes(x = IV_set, y = n_cis)) +
+  geom_boxplot(aes(fill = IV_set)) +
+  scale_fill_manual(values = cols_IVsets) +
+  scale_y_log10() +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 55, hjust = 1),
+        legend.position = "none") +
+  labs(x = "", y = "Number of cis-window pQTL\n associations per cis-IV")
+
+p5.2.3 <- pqtls_assocs_joined_relaxed  |> dplyr::filter(n_cis >= 1) |>
+  ggplot(aes(x = IV_set, y = n_trans)) +
+  geom_boxplot(aes(fill = IV_set)) +
+  scale_fill_manual(values = cols_IVsets) +
+  scale_y_log10() +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 55, hjust = 1),
+        legend.position = "none") +
+  labs(x = "", y = "Number of trans-window pQTL\n associations per cis-IV")
+
+p6.2 <- pqtls_assocs_joined_relaxed  |> dplyr::filter(n_cis >= 1) |>
+  ggplot(aes(x = n_cis, y = n_trans, colour = IV_set)) +
+  facet_wrap(.~IV_set, nrow = 2) +
+  geom_jitter(width = 0.2, height = 0) +
+  ggrepel::geom_text_repel(aes(label = label), size = 3) +
+  scale_colour_manual(values = cols_IVsets) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  labs(x = "Number of cis-window pQTL associations per cis-IV", y = "Number of trans-window pQTL\n associations per cis-IV")
+
+gridExtra::grid.arrange(p5.2.2, p5.2.3, p6.2,nrow = 1, widths = c(0.15,0.15,0.7), top = "Pleiotropy profile of IV sets (common: P<5e-8; rare: P<1e-4)")
+
+p6.2.zoom <- pqtls_assocs_joined_relaxed  |> dplyr::filter(n_cis >= 1) |>
+  ggplot(aes(x = n_cis, y = n_trans, colour = IV_set)) +
+  facet_wrap(.~IV_set, nrow = 2) +
+  geom_jitter(width = 0.2, height = 0) +
+  ggrepel::geom_text_repel(aes(label = label), size = 3) +
+  scale_colour_manual(values = cols_IVsets) +
+  scale_y_continuous(limits = c(0,200)) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  labs(x = "Number of cis-pQTL associations per cis-IV", y = "Number of trans-pQTL associations\n per cis-IV")
+
+gridExtra::grid.arrange(p5.2.2, p5.2.3, p6.2.zoom,nrow = 1, widths = c(0.15,0.18,0.7), top = "Pleiotropy profile of IV sets (common: P<5e-8; rare: P<1e-4) [Y-ZOOMED]")
+
+# Average number of associations
+do.call("rbind", pqtls_assocs_joined_relaxed |> dplyr::filter(n_cis >= 1) |> group_by(IV_set) |> group_split() |> lapply(function(x){
+  data.frame(IVset = unique(x$IV_set), n_cis_vars = nrow(x), prop_cis_gt1 = sum(x$n_cis > 1)/nrow(x))}))
+
+do.call("rbind", pqtls_assocs_joined_relaxed |> dplyr::filter(n_truecis >= 1) |> group_by(IV_set) |> group_split() |> lapply(function(x){
+  data.frame(IVset = unique(x$IV_set), n_cis_vars = nrow(x), n_cis_gt1 = sum(x$n_cis > 1), prop_cis_gt1 = sum(x$n_cis > 1)/nrow(x))}))
+
+```
+
+Restricting to genes that have both rare and common cis-IVs
+
+```{r}
+#| label: cis-v-trans-pleiotropy-relaxed-sharegenes
+#| fig.height: 4
+#| fig.width: 9
+
+# Filter to genes that have both common (genome) and rare cis-IVs (n=1249 genes)
+shared_cis_genome <- intersect(unique(lookup_pQTLs_relaxed$sun_gwas_variant_common_clumped |> dplyr::filter(cis_trans == "cis") |> dplyr::pull(protein_target)),
+                               unique(lookup_pQTLs_relaxed$dhindsa_exwas_variant_rare_pruned |> dplyr::filter(cis_trans == "cis") |> dplyr::pull(protein_target)))
+# Filter to genes that have both common (exome) and rare cis-IVs (n=849 genes)
+shared_cis_exome <- intersect(unique(lookup_pQTLs_relaxed$dhindsa_exwas_variant_common |> dplyr::filter(cis_trans == "cis") |> dplyr::pull(protein_target)),
+                              unique(lookup_pQTLs_relaxed$dhindsa_exwas_variant_rare_pruned |> dplyr::filter(cis_trans == "cis") |> dplyr::pull(protein_target)))
+
+pqtls_assocs_joined_relaxed_sharedcis <- do.call("rbind", pQTLs_assocs_relaxed) |>
+  dplyr::filter(grepl("variant",IV_set),
+                sapply(strsplit(assoc_cis_genes, ";"), function(x){any(x %in% unique(c(shared_cis_genome,shared_cis_exome)))})) |> # Keep varaints that are cis-QTLs for shared genes
+  dplyr::mutate(IV_set = factor(IVsets[IV_set], levels = IVsets)) |>
+  dplyr::group_by(IV_set) |> 
+  dplyr::mutate(label = ifelse(n_trans == max(n_trans) & grepl("exome",IV_set), paste(variant,proximal_gene), NA)) |> dplyr::ungroup()
+
+p5.3.1 <- pqtls_assocs_joined_relaxed_sharedcis |>
+  ggplot(aes(x = IV_set, y = n_assocs)) +
+  geom_boxplot(aes(fill = IV_set)) +
+  scale_fill_manual(values = cols_IVsets) +
+  scale_y_log10() +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 55, hjust = 1),
+        legend.position = "none") +
+  labs(x = "", y = "Number of pQTL associations")
+
+p5.3.2 <- pqtls_assocs_joined_relaxed_sharedcis |>
+  ggplot(aes(x = IV_set, y = n_cis)) +
+  geom_boxplot(aes(fill = IV_set)) +
+  scale_fill_manual(values = cols_IVsets) +
+  scale_y_log10() +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 55, hjust = 1),
+        legend.position = "none") +
+  labs(x = "", y = "Number of cis-pQTL associations\n per cis-IV")
+
+p5.3.3 <- pqtls_assocs_joined_relaxed_sharedcis |>
+  ggplot(aes(x = IV_set, y = n_trans)) +
+  geom_boxplot(aes(fill = IV_set)) +
+  scale_fill_manual(values = cols_IVsets) +
+  scale_y_log10() +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 55, hjust = 1),
+        legend.position = "none") +
+  labs(x = "", y = "Number of trans-pQTL associations\n per cis-IV")
+
+p6.3 <- pqtls_assocs_joined_relaxed_sharedcis |>
+  ggplot(aes(x = n_cis, y = n_trans, colour = IV_set)) +
+  geom_jitter(width = 0.2, height = 0) +
+  facet_wrap(.~IV_set, nrow = 2) +
+  geom_point() +
+  ggrepel::geom_text_repel(aes(label = label), size = 3) +
+  scale_colour_manual(values = cols_IVsets) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  labs(x = "Number of cis-pQTL associations per cis-IV", y = "Number of trans-pQTL associations\n per cis-IV")
+
+gridExtra::grid.arrange(p5.3.2, p5.3.3, p6.3, nrow = 1, widths = c(0.15,0.15,0.7), top = "Pleiotropy profile of IV sets (common: P<5e-8; rare: P<1e-4) - cis-QTL shared genes")
+
+p6.3.zoom <- pqtls_assocs_joined_relaxed_sharedcis |>
+  ggplot(aes(x = n_cis, y = n_trans, colour = IV_set)) +
+  facet_wrap(.~IV_set, nrow = 2) +
+  geom_jitter(width = 0.2, height = 0) +
+  ggrepel::geom_text_repel(aes(label = label), size = 3) +
+  scale_colour_manual(values = cols_IVsets) +
+  scale_y_continuous(limits = c(0,200)) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  labs(x = "Number of cis-pQTL associations per cis-IV", y = "Number of trans-pQTL associations\n per cis-IV")
+
+gridExtra::grid.arrange(p5.3.2, p5.3.3, p6.3.zoom, nrow = 1, widths = c(0.18,0.18,0.64), top = "Pleiotropy profile of IV sets (common: P<5e-8; rare: P<1e-4) - cis-QTL shared genes")
+
+#pqtls_assocs_joined_relaxed_sharedcis |> group_by(IV_set) |> group_split() |> lapply(summary)
+
+```
+
 Can we take genes that have both rare and common cis-IVs or trans-IVs available (using the relaxed p-value theshold for rare variants) and look at how many other genes, on average, IVs in these genes associate with? We might hypothesise that perturbations to a gene (either via a common or rare variant) will exhibit similar vertical pleiotropic effects on genes downstream. Although there is differences in the power to detect rare vs common variant effects, at relaxed p-value thresholds many more rare trans QTLs can be detected than common (pontentially due to the larger effect sizes of rare trans IVs), and almost all O'link proteins have rare-trans associations (so we can see them). But *how many* other proteins do these variants associate with (i.e. how specific are they?)? Lower specificity of common over rare IVs may suggest trans effects that are mediated through LD (genetic confounding) when instrumented with common variants, which is less problematic for rare variants:
 
 ```{r}
 #| label: rare-v-common-pleiotropy
 #| fig.height: 4
-#| fig.width: 12
+#| fig.width: 13.5
 
-# Using the WES IVs (common IVs P<5e-8, rare IVs P<1e-4), as these can be directly annotated to genes:
+# Using the most pleiotropic cis-IVs for shared genes
+# Repeated below restricting to those IVs that have true cis effects (exonic variants in instrumented gene)
 
-# Collapse variant level cis and trans pQTL scores to the gene level (average)
-pqtls_collapsed_relaxed <- pqtls_assocs_joined_relaxed |>
-  dplyr::filter(IV_set %in% c("exome:rare","exome:common")) |>
-  dplyr::group_by(proximal_gene, IV_set) |>
-  dplyr::summarise(mean_n_assocs = mean(n_assocs),
-                   mean_n_cis = mean(n_cis),
-                   sd_n_cis = sd(n_cis),
-                   mean_n_trans = mean(n_trans),
-                   sd_n_trans = sd(n_trans))
+## Filter to top pleiotropic vartaint per gene (of exome:rare and genome:commmon shared sets, n = 1249)
+pqtls_assocs_joined_relaxed_toppleiotropic <- pqtls_assocs_joined_relaxed_sharedcis |>
+  dplyr::mutate(all_cis_genes = assoc_cis_genes) |>
+  tidyr::separate_rows(assoc_cis_genes, sep = ";") |>
+  dplyr::filter(IV_set %in% c("exome:rare","genome:common"),
+                n_cis >= 1,
+                assoc_cis_genes %in% shared_cis_genome) |>
+  dplyr::arrange(assoc_cis_genes, desc(n_assocs)) |>
+  dplyr::group_by(IV_set) |>
+  dplyr::filter(duplicated(assoc_cis_genes) == FALSE) |> dplyr::ungroup()
 
+## Variant pleiotropy
+p7.cis <- pqtls_assocs_joined_relaxed_toppleiotropic  |>
+  ggplot(aes(x = IV_set, y = n_cis)) +
+  geom_boxplot(aes(fill = IV_set)) +
+  scale_fill_manual(values = cols_IVsets) +
+  scale_y_log10() +
+  ggpubr::stat_compare_means(label.x.npc = 0.5, label = "p.format", size = 2) + #Wilcoxon test
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 55, hjust = 1),
+        legend.position = "none") +
+  labs(x = "", y = "Number of cis-pQTL associations\n per cis-IV")
 
-p7 <- pqtls_collapsed_relaxed[,c(1,2,4,5)] |>
+p7.trans <- pqtls_assocs_joined_relaxed_toppleiotropic  |>
+  ggplot(aes(x = IV_set, y = n_trans)) +
+  geom_boxplot(aes(fill = IV_set)) +
+  scale_fill_manual(values = cols_IVsets) +
+  scale_y_log10() +
+  ggpubr::stat_compare_means(label.x.npc = 0.5, label = "p.format", size = 2) + #Wilcoxon test
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 55, hjust = 1),
+        legend.position = "none") +
+  labs(x = "", y = "Number of trans-pQTL associations\n per cis-IV")
+
+## Gene wise comparison
+p7.plotdat <- pqtls_assocs_joined_relaxed_toppleiotropic[,c("assoc_cis_genes", "IV_set", "n_cis", "all_cis_genes")] |>
   tidyr:: pivot_wider(
     names_from = IV_set,
-    values_from = c(mean_n_cis, sd_n_cis),
+    values_from = c(n_cis, all_cis_genes),
     names_glue = "{IV_set}_{.value}"
   ) |>
-  dplyr::filter(!(is.na(`exome:rare_mean_n_cis`)) & !(is.na(`exome:common_mean_n_cis`))) |>
-  ggplot(aes(x = `exome:rare_mean_n_cis`, y = `exome:common_mean_n_cis`)) +
-  geom_abline(intercept = 0, slope = 1, colour = "red") +
-  geom_point() +
-  scale_x_continuous(limits = c(0,10)) +
+  dplyr::filter(!(is.na(`exome:rare_n_cis`)) & !(is.na(`genome:common_n_cis`))) |> 
+  rowwise() |>
+  dplyr::mutate( # Calc prpoprtion of shared cis genes
+    prop_shared = {
+      s1 <- strsplit(`exome:rare_all_cis_genes`, ";")[[1]]
+      s2 <- strsplit(`genome:common_all_cis_genes`, ";")[[1]]
+      length(intersect(s1, s2)) / length(union(s1, s2))
+    }) |> ungroup()
+
+p7 <- p7.plotdat |>
+  ggplot(aes(x = `exome:rare_n_cis`, y = `genome:common_n_cis`, colour = prop_shared)) +
+  geom_abline(intercept = 0, slope = 1, colour = "grey50") +
+  geom_jitter(size = 0.5) +
+  scale_x_continuous(limits = c(0,14), breaks = 1:14) +
+  scale_y_continuous(limits = c(0,14), breaks = 1:14) +
+  scale_colour_gradient(low = "grey90", high = "red") +
   theme_minimal() +
-  labs(x = "Ave num. cis-gene associations \n (across rare IVs in gene)",
-       y = "Ave num. cis-gene associations \n (across common IVs in gene)")
+  theme(legend.position = "bottom") +
+  labs(x = "No. cis-pQTL associations \n (rare cis-IV for gene)",
+       y = "No. cis-pQTL associations \n (common cis-IV for gene)")
 
-
-p8 <- pqtls_collapsed_relaxed[,c(1,2,6,7)] |>
+p8.plotdat <- pqtls_assocs_joined_relaxed_toppleiotropic[,c("assoc_cis_genes", "IV_set", "n_trans", "assoc_trans_genes")] |>
   tidyr:: pivot_wider(
     names_from = IV_set,
-    values_from = c(mean_n_trans, sd_n_trans),
+    values_from = c(n_trans, assoc_trans_genes),
     names_glue = "{IV_set}_{.value}"
   ) |>
-  dplyr::filter(!(is.na(`exome:rare_mean_n_trans`)) & !(is.na(`exome:common_mean_n_trans`))) |>
-  ggplot(aes(x = `exome:rare_mean_n_trans`, y = `exome:common_mean_n_trans`)) +
-  geom_abline(intercept = 0, slope = 1, colour = "red") +
-  geom_point() +
-  scale_x_continuous(limits = c(0,250)) +
+  dplyr::filter(!(is.na(`exome:rare_n_trans`)) & !(is.na(`genome:common_n_trans`))) |> 
+  rowwise() |>
+  dplyr::mutate( # Calc prpoprtion of shared trans genes
+    prop_shared = {
+      s1 <- strsplit(`exome:rare_assoc_trans_genes`, ";")[[1]]
+      s2 <- strsplit(`genome:common_assoc_trans_genes`, ";")[[1]]
+      length(intersect(s1, s2)) / length(union(s1, s2))
+    }) |> ungroup()
+  
+p8 <- p8.plotdat |> dplyr::arrange(prop_shared) |>
+  ggplot(aes(x = `exome:rare_n_trans`, y = `genome:common_n_trans`, colour = prop_shared)) +
+  geom_abline(intercept = 0, slope = 1, colour = "grey50") +
+  geom_point(size = 0.5) +
+  scale_x_continuous(limits = c(0,650)) +
+  scale_y_continuous(limits = c(0,650)) +
+  scale_colour_gradient(low = "grey", high = "red") +
   theme_minimal() +
-  labs(x = "Ave num. trans-gene associations \n (across rare IVs in gene)",
-       y = "Ave num. trans-gene associations \n (across common IVs in gene)")
+  theme(legend.position = "bottom") +
+  labs(x = "No. trans-pQTL associations \n (rare cis-IV for gene)",
+       y = "No. trans-pQTL associations \n (common cis-IV for gene)")
+  
+p8_inset <- p8.plotdat |> dplyr::arrange(prop_shared) |>
+  ggplot(aes(x = `exome:rare_n_trans`, y = `genome:common_n_trans`, colour = prop_shared)) +
+  geom_abline(intercept = 0, slope = 1, colour = "grey50") +
+  geom_jitter() +
+  scale_x_continuous(limits = c(0,30)) +
+  scale_y_continuous(limits = c(0,30)) +
+  scale_colour_gradient(low = "grey", high = "red") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        axis.title = element_blank(),
+        plot.background = element_rect(fill = "white", colour = "grey")) +
+  labs(x = "No. trans-pQTL associations \n (rare cis-IV for gene)",
+       y = "No. trans-pQTL associations \n (common cis-IV for gene)")
 
-# Does a gene having aveage higher cis-pleiotropy result in an average higher trans-pleiotropy?
+p8_join <- cowplot::ggdraw() + cowplot::draw_plot(p8) + cowplot::draw_plot(p8_inset, x = 0.5, y = 0.6, width = 0.95 - 0.5, height = 0.95 - 0.6)
+  
+# Correlation between cis and trans associations 
 
-# Filter to genes that have both common and rare IVs in them
-shared_genes <- intersect(unique(lookup_pQTLs_relaxed$dhindsa_exwas_variant_common$proximal_gene),
-                          unique(lookup_pQTLs_relaxed$dhindsa_exwas_variant_rare_pruned$proximal_gene))
+p8.2 <-  pqtls_assocs_joined_relaxed_toppleiotropic |>
+  ggplot(aes(x = n_cis, y = n_trans, group = IV_set, colour = IV_set)) +
+  geom_jitter(width = 0.2, height = 0, size = 1) +
+  geom_smooth(method = "lm", se = FALSE) +
+  scale_y_log10() +
+  #scale_x_log10() +
+  scale_colour_manual(name = "", values = cols_IVsets) + 
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  labs(x = "No. cis-pQTL associations",
+       y = "No. trans-pQTL associations")
 
-p8.2 <-  pqtls_collapsed_relaxed |> dplyr::filter(proximal_gene %in% shared_genes) |>
-  ggplot(aes(x = mean_n_cis, y = mean_n_trans, group = IV_set, colour = IV_set)) +
-  geom_point(alpha = 0.7) +
+# Associations
+dat_c <- pqtls_assocs_joined_relaxed_toppleiotropic |> dplyr::filter(IV_set == "exome:rare") |> dplyr::mutate(n_trans = n_trans + 1)
+sum_c <- summary(lm(log10(n_trans) ~ n_cis, data = dat_c))
+10^sum_c$coefficients["n_cis",1] # beta = 1.15 
+sum_c$coefficients["n_cis",4] #P = 5.0x10^-11
+
+dat_r <- pqtls_assocs_joined_relaxed_toppleiotropic |> dplyr::filter(IV_set == "genome:common") |> dplyr::mutate(n_trans = n_trans + 1)
+sum_r <- summary(lm(log10(n_trans) ~ n_cis, data = dat_r))
+10^sum_r$coefficients["n_cis",1] #beta = 1.21 
+sum_r$coefficients["n_cis",4] #P = 2.1x10^-17
+
+gridExtra::grid.arrange(p7.cis, p7.trans, p7, p8_join, p8.2, nrow = 1, widths = c(0.1,0.1,0.26,0.26,0.26), top = "Average pleiotropy of rare or common cis-IVs for a given gene (cis-QTL shared genes)")
+
+## Flagged genes:
+pqtls_assocs_joined_relaxed_toppleiotropic |> dplyr::filter(assoc_cis_genes == "SIGLEC1") |> pull(assoc_trans_genes)
+pqtls_assocs_joined_relaxed_toppleiotropic |> dplyr::filter(assoc_cis_genes == "PLG") |> pull(assoc_trans_genes)
+```
+
+```{r}
+#| label: rare-v-common-pleiotropy-truecis
+#| fig.height: 4
+#| fig.width: 13.5
+
+# Restricting to exonic varaints with true-cis effects
+shared_truecis <- intersect(unique(lookup_pQTLs_relaxed$dhindsa_exwas_variant_common |> dplyr::filter(proximal_gene == paste0("'",protein_target, "'")) |> dplyr::pull(proximal_gene)),
+                            unique(lookup_pQTLs_relaxed$dhindsa_exwas_variant_rare |> dplyr::filter(proximal_gene == paste0("'",protein_target, "'")) |> dplyr::pull(proximal_gene)))
+
+## Filter to top pleiotropic vartaint per gene (of exome:rare and genome:commmon shared true cis sets, n = 301)
+pqtls_assocs_joined_relaxed_truecis <- pqtls_assocs_joined_relaxed_sharedcis |>
+  dplyr::mutate(all_cis_genes = assoc_cis_genes) |>
+  tidyr::separate_rows(assoc_cis_genes, sep = ";") |>
+  dplyr::filter(IV_set %in% c("exome:rare","exome:common"),
+                proximal_gene %in% shared_truecis,
+                proximal_gene == paste0("'",assoc_cis_genes, "'")) |>
+  dplyr::arrange(assoc_cis_genes, desc(n_assocs)) |>
+  dplyr::group_by(IV_set) |>
+  dplyr::filter(duplicated(assoc_cis_genes) == FALSE) |> dplyr::ungroup()
+
+## Variant pleiotropy
+p7.2.cis <- pqtls_assocs_joined_relaxed_truecis  |>
+  ggplot(aes(x = IV_set, y = n_cis)) +
+  geom_boxplot(aes(fill = IV_set)) +
+  scale_fill_manual(values = cols_IVsets) +
+  scale_y_log10() +
+  ggpubr::stat_compare_means(label.x.npc = 0.5, label = "p.format", size = 2) + #Wilcoxon test
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 55, hjust = 1),
+        legend.position = "none") +
+  labs(x = "", y = "Number of cis-pQTL associations\n per cis-IV")
+
+p7.2.trans <- pqtls_assocs_joined_relaxed_truecis  |>
+  ggplot(aes(x = IV_set, y = n_trans)) +
+  geom_boxplot(aes(fill = IV_set)) +
+  scale_fill_manual(values = cols_IVsets) +
+  scale_y_log10() +
+  ggpubr::stat_compare_means(label.x.npc = 0.5, label = "p.format", size = 2) + #Wilcoxon test
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 55, hjust = 1),
+        legend.position = "none") +
+  labs(x = "", y = "Number of trans-pQTL associations\n per cis-IV")
+
+## Gene wise comparison
+p7.2.plotdat <- pqtls_assocs_joined_relaxed_truecis[,c("assoc_cis_genes", "IV_set", "n_cis", "all_cis_genes")] |>
+  tidyr:: pivot_wider(
+    names_from = IV_set,
+    values_from = c(n_cis, all_cis_genes),
+    names_glue = "{IV_set}_{.value}"
+  ) |>
+  dplyr::filter(!(is.na(`exome:rare_n_cis`)) & !(is.na(`exome:common_n_cis`))) |> 
+  rowwise() |>
+  dplyr::mutate( # Calc prpoprtion of shared cis genes
+    prop_shared = {
+      s1 <- strsplit(`exome:rare_all_cis_genes`, ";")[[1]]
+      s2 <- strsplit(`exome:common_all_cis_genes`, ";")[[1]]
+      length(intersect(s1, s2)) / length(union(s1, s2))
+    }) |> ungroup()
+
+p7.2 <- p7.2.plotdat |>
+  ggplot(aes(x = `exome:rare_n_cis`, y = `exome:common_n_cis`, colour = prop_shared)) +
+  geom_abline(intercept = 0, slope = 1, colour = "grey50") +
+  geom_jitter(size = 2) +
+  scale_x_continuous(limits = c(0,7), breaks = 1:7) +
+  scale_y_continuous(limits = c(0,7), breaks = 1:7) +
+  scale_colour_gradient(low = "grey90", high = "red") +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  labs(x = "No. cis-pQTL associations \n (rare cis-IV for gene)",
+       y = "No. cis-pQTL associations \n (common cis-IV for gene)")
+
+p8.2.plotdat <- pqtls_assocs_joined_relaxed_truecis[,c("assoc_cis_genes", "IV_set", "n_trans", "assoc_trans_genes")] |>
+  tidyr:: pivot_wider(
+    names_from = IV_set,
+    values_from = c(n_trans, assoc_trans_genes),
+    names_glue = "{IV_set}_{.value}"
+  ) |>
+  dplyr::filter(!(is.na(`exome:rare_n_trans`)) & !(is.na(`exome:common_n_trans`))) |> 
+  rowwise() |>
+  dplyr::mutate( # Calc prpoprtion of shared trans genes
+    prop_shared = {
+      s1 <- strsplit(`exome:rare_assoc_trans_genes`, ";")[[1]]
+      s2 <- strsplit(`exome:common_assoc_trans_genes`, ";")[[1]]
+      length(intersect(s1, s2)) / length(union(s1, s2))
+    }) |> ungroup()
+  
+p8.2 <- p8.2.plotdat |> dplyr::arrange(prop_shared) |>
+  ggplot(aes(x = `exome:rare_n_trans`, y = `exome:common_n_trans`, colour = prop_shared)) +
+  geom_abline(intercept = 0, slope = 1, colour = "grey50") +
+  geom_point(size = 2) +
+  scale_x_continuous(limits = c(0,350)) +
+  scale_y_continuous(limits = c(0,350)) +
+  scale_colour_gradient(low = "grey", high = "red") +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  labs(x = "No. trans-pQTL associations \n (rare cis-IV for gene)",
+       y = "No. trans-pQTL associations \n (common cis-IV for gene)")
+  
+p8.2_inset <- p8.2.plotdat |> dplyr::arrange(prop_shared) |>
+  ggplot(aes(x = `exome:rare_n_trans`, y = `exome:common_n_trans`, colour = prop_shared)) +
+  geom_abline(intercept = 0, slope = 1, colour = "grey50") +
+  geom_jitter(size = 1) +
+  scale_x_continuous(limits = c(0,20)) +
+  scale_y_continuous(limits = c(0,20)) +
+  scale_colour_gradient(low = "grey", high = "red") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        axis.title = element_blank(),
+        plot.background = element_rect(fill = "white", colour = "grey")) +
+  labs(x = "No. trans-pQTL associations \n (rare cis-IV for gene)",
+       y = "No. trans-pQTL associations \n (common cis-IV for gene)")
+
+p8.2_join <- cowplot::ggdraw() + cowplot::draw_plot(p8.2) + cowplot::draw_plot(p8.2_inset, x = 0.5, y = 0.6, width = 0.95 - 0.5, height = 0.95 - 0.6)
+  
+# Correlation between cis and trans associations 
+
+p8.2.2 <-  pqtls_assocs_joined_relaxed_truecis |>
+  ggplot(aes(x = n_cis, y = n_trans, group = IV_set, colour = IV_set)) +
+  geom_jitter() +
   geom_smooth(method = "lm", se = FALSE) +
   scale_y_log10() +
   scale_colour_manual(name = "", values = cols_IVsets) + 
   theme_minimal() +
   theme(legend.position = "bottom") +
-  labs(x = "Ave num. cis-gene associations \n (across IVs in gene)",
-       y = "Ave num. trans-gene associations \n (across IVs in gene)")
+  labs(x = "No. cis-pQTL associations",
+       y = "No. trans-pQTL associations")
 
-gridExtra::grid.arrange(p7, p8, p8.2, nrow = 1, top = "Average pleiotropy of rare or common IVs in a given gene")
+gridExtra::grid.arrange(p7.2.cis, p7.2.trans, p7.2, p8.2_join, p8.2.2, nrow = 1, widths = c(0.1,0.1,0.26,0.26,0.26), top = "Average pleiotropy of rare or common cis-IVs for a given gene (true cis-QTL shared genes)")
 
 ```
 
@@ -955,10 +1441,10 @@ Are the higher numbers of cis-gene and trans-gene (within the same chromosome) a
 ```{r}
 #| label: pleiotropy-vs-genedensity
 #| fig.height: 4
-#| fig.width: 12
+#| fig.width: 15
 #| cache: TRUE
 
-# Annotate WES pQTLs (common IVs P<5e-8, rare IVs P<1e-4) with numbe.r of genes in proximity
+# Annotate pQTLs (common IVs P<5e-8, rare IVs P<1e-4) with number of genes in proximity
 count_genes_1mb <- function(geneinfo, variant_ids){
   out <- data.frame(variant = variant_ids,
                     chr = as.numeric(sub("-.*","",variant_ids)),
@@ -981,22 +1467,44 @@ count_genes_1mb <- function(geneinfo, variant_ids){
   return(out[,c("variant","n_genes")])
 }
 
-variant_ids <- pqtls_assocs_joined_relaxed |> dplyr::filter(IV_set %in% c("exome:rare","exome:common")) |> dplyr::pull(variant)
+annotate_highld <- function(variant_ids){
+  out <- data.frame(variant = variant_ids,
+                    chr = as.numeric(sub("-.*","",variant_ids)),
+                    pos = as.numeric(sub("^.*-(.*)-.*-.*$","\\1",variant_ids))) |>
+    dplyr::arrange(chr, pos)
+  
+  for (i in 1:nrow(out)){
+    # High LD regions on chromosome
+    ldset <- highld_regions |> dplyr::filter(V1 == paste0("chr", out$chr[i])) |> data.frame()
+    inset <- any(apply(ldset, 1, function(x){out$pos[i] > as.numeric(x["V2"]) & out$pos[i] < as.numeric(x["V3"])}))
+    out$longrange_ld[i] <- inset
+  }
+  
+  return(out[,c("variant","longrange_ld")])
+}
 
-pqtls_assocs_joined_relaxed <- pqtls_assocs_joined_relaxed |> 
-  left_join(count_genes_1mb(geneinfo = geneinfo, variant_ids = variant_ids), by = "variant") |>
+variant_ids <- c(pqtls_assocs_joined_relaxed_toppleiotropic|> dplyr::filter(IV_set == "exome:rare") |> dplyr::pull(variant),
+                 sub(":","-",gsub("_","-",pqtls_assocs_joined_relaxed_toppleiotropic|> dplyr::filter(IV_set == "genome:common") |> dplyr::pull(variant)))) |> unique()
+
+pqtls_assocs_joined_relaxed_toppleiotropic <- pqtls_assocs_joined_relaxed_toppleiotropic |>
+  dplyr::mutate(variant_formatted = ifelse(IV_set == "genome:common", sub(":","-",gsub("_","-",variant)), variant))
+
+## Annotate variants with genes in cis and flag those in high LD region
+pqtls_assocs_joined_relaxed_toppleiotropic <- pqtls_assocs_joined_relaxed_toppleiotropic |> 
+  left_join(count_genes_1mb(geneinfo = geneinfo, variant_ids = variant_ids), by = c("variant_formatted"="variant")) |>
   dplyr::rename("n_codinggenes_1mb" = "n_genes")
 
-pqtls_assocs_joined_relaxed <- pqtls_assocs_joined_relaxed |> 
-  left_join(count_genes_1mb(geneinfo = geneinfo_olink, variant_ids = variant_ids), by = "variant") |>
+pqtls_assocs_joined_relaxed_toppleiotropic  <- pqtls_assocs_joined_relaxed_toppleiotropic|> 
+  left_join(count_genes_1mb(geneinfo = geneinfo_olink, variant_ids = variant_ids), by = c("variant_formatted"="variant")) |>
   dplyr::rename("n_olinkgenes_1mb" = "n_genes")
 
-p9 <- pqtls_assocs_joined_relaxed |> 
-  dplyr::filter(IV_set %in% c("exome:rare","exome:common") &
-                  proximal_gene %in% paste0("'", geneinfo_olink$gene, "'") & 
-                  proximal_gene %in% shared_genes) |>
+pqtls_assocs_joined_relaxed_toppleiotropic  <- pqtls_assocs_joined_relaxed_toppleiotropic|> 
+  left_join(annotate_highld(variant_ids = variant_ids), by = c("variant_formatted"="variant"))
+
+# Plot
+p9 <- pqtls_assocs_joined_relaxed_toppleiotropic |> 
   ggplot(aes(x = n_olinkgenes_1mb, y = n_cis, colour = IV_set)) +
-  geom_hline(yintercept = c(0,3), col = "grey70") + 
+  geom_hline(yintercept = c(0,5), col = "grey70") + 
   geom_jitter(width = 0.2, height = 0, size = 2) +
   facet_grid(IV_set ~ .) +
   scale_colour_manual(values = cols_IVsets) +
@@ -1006,12 +1514,9 @@ p9 <- pqtls_assocs_joined_relaxed |>
        y = "Number of pQTL associations with \n O'link proteins within 1Mb",
        title = "IVs in genes with both common and rare WES instruments")
 
-p10 <- pqtls_assocs_joined_relaxed |> 
-  dplyr::filter(IV_set %in% c("exome:rare","exome:common") &
-                  proximal_gene %in% paste0("'", geneinfo_olink$gene, "'") & 
-                  proximal_gene %in% shared_genes) |>
+p10 <- pqtls_assocs_joined_relaxed_toppleiotropic |> 
   ggplot(aes(x = n_codinggenes_1mb, y = n_cis, colour = IV_set)) +
-  geom_hline(yintercept = c(0,3), col = "grey70") + 
+  geom_hline(yintercept = c(0,5), col = "grey30") + 
   geom_jitter(width = 0.2, height = 0, size = 2) +
   facet_grid(IV_set ~ .) +
   scale_colour_manual(values = cols_IVsets) +
@@ -1021,10 +1526,33 @@ p10 <- pqtls_assocs_joined_relaxed |>
        y = "Number of pQTL associations with \n O'link proteins within 1Mb",
        title = "IVs in genes with both common and rare WES instruments")
 
-gridExtra::grid.arrange(p9, p10, nrow = 1, top = "Average pleiotropy of rare or common IVs in a given gene")
+p11 <- pqtls_assocs_joined_relaxed_toppleiotropic |> 
+  ggplot(aes(x = longrange_ld, y = n_cis)) +
+  facet_grid(.~IV_set) +
+  geom_boxplot(aes(fill = IV_set)) +
+  scale_fill_manual(values = cols_IVsets) +
+  #scale_y_log10() +
+  ggpubr::stat_compare_means(label.x.npc = 0.5, label = "p.format", size = 2) + #Wilcoxon test
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 55, hjust = 1),
+        legend.position = "none") +
+  labs(x = "IV in long-range LD region", y = "Number of cis-pQTL associations\n per cis-IV")
+
+p11.2 <- pqtls_assocs_joined_relaxed_toppleiotropic |> 
+  ggplot(aes(x = longrange_ld, y = n_trans)) +
+  facet_grid(.~IV_set) +
+  geom_boxplot(aes(fill = IV_set)) +
+  scale_fill_manual(values = cols_IVsets) +
+  scale_y_log10() +
+  ggpubr::stat_compare_means(label.x.npc = 0.5, label = "p.format", size = 2) + #Wilcoxon test
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 55, hjust = 1),
+        legend.position = "none") +
+  labs(x = "IV in long-range LD region", y = "Number of trans-pQTL associations\n per cis-IV")
+
+gridExtra::grid.arrange(p9, p10, p11, p11.2, nrow = 1, widths = c(0.35,0.35,0.15,0.15), top = "Average pleiotropy of rare or common cis-IVs for shared gene")
 
 ```
-
 How often do genes instrumented with either common or rare variants show consistant trans effects? We may anticipate that true vertical pleiotropy is detectable through both instrumentation strategies, whereas problematic trans effects, arising due to LD, will result in associations seen when using common variant instrumentation alone...
 
 What proportion of cis and trans associations are shared between rare and common instrumentation strategies (on the gene level)?
@@ -1112,27 +1640,33 @@ Heterogenity in SNP effects can be a result of variants acting within differing 
 
 ```{r}
 #| label: IV-heterogenity
-#| fig.height: 3.5
-#| fig.width: 6
+#| fig.height: 20
+#| fig.width: 5
 
 # Read in results of mr_heterogenity() for common and rare variant IV sets
 files_het <- list.files(res_dir, pattern = "heterogenity", full.names = T)
 het <- do.call("rbind", lapply(files_het, function(x){data.table::fread(x)}))
 
-het |> 
-  dplyr::filter(method == "Inverse variance weighted" &
-                  n_snps > 5) |>
-  dplyr::mutate(IV_set = factor(IVsets[variant_set], levels = IVsets)) |>
-  ggplot(aes(x = variant_type, y = -log10(Q_pval))) +
-  facet_grid(. ~ IV_set) +
+het_set <- het |> 
+  dplyr::filter(method == "Inverse variance weighted" & n_snps > 5) |>
+  dplyr::mutate(IV_set = factor(IVsets[variant_set], levels = variant_IVsets))
+
+het_set|> 
+  ggplot(aes(x = variant_type, y = Q)) +
+  facet_grid(outcome ~ IV_set) +
   geom_boxplot(aes(fill = IV_set)) +
   scale_fill_manual(values = cols_IVsets) +
   scale_y_log10() +
   theme_minimal() +
   theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) + 
-  labs(x = "", y = "-log10(Q p-value)", title = "Heterogenity in causal estimates (proteins with >5 IVs)")
+  labs(x = "", y = "Q statistic", title = "Heterogenity in causal estimates (proteins with >5 IVs)")
 
 # Restrict to the same proteins across instrument sets (sensitivity analysis)
+
+# comp_hetcis <- het_set |> dplyr::filter(variant_type == "cis") |> with(pairwise.wilcox.test(Q, IV_set, p.adjust.method = "none"))
+# comp_hetcis$p.value
+# comp_hettrans <- het_set |> dplyr::filter(variant_type == "trans") |> with(pairwise.wilcox.test(Q, IV_set, p.adjust.method = "none"))
+# comp_hettrans$p.value
 ```
 
 ## Causal effect estimates
@@ -1164,7 +1698,7 @@ plot_fullresults <- function(results_MR, outcome, nsnps = 3, cistrans = "cis"){
     dplyr::arrange(pval) |>
     dplyr::mutate(
       set = IVsets[IV_set],
-      col = factor(ifelse(pval <= 0.05, set, NA), levels = IVsets),
+      col = factor(ifelse(pval <= 0.01, set, NA), levels = IVsets),
       label = ifelse(pval <= alpha, exposure, NA))
     #dplyr::mutate(label = ifelse(duplicated(label), NA, label))
   
@@ -1197,7 +1731,6 @@ How many new highly significant causal associations are detected with rare varia
 ```{r}
 #| label: causal-effect-overlap
 #| cache: TRUE
-#| include: FALSE
 
 # Pull significant MR results (at p<5e-05 for comparison of cis IV sets)
 # >=3 IVs for variant-based instruments, 1 sufficient for masks (exclude masks for now?)
@@ -1214,7 +1747,7 @@ sig_MR_relaxed <- lapply(res_MR_relaxed, function(x){
 
 # Upset plot of overlap in support for exposure --> outcome association
 upset_sig_cis <- lapply(sig_MR_relaxed, function(x){
-  list("mask:pLOF|miss" = x |> dplyr::filter(IVset == "mask:pLOF|miss") |>  dplyr::pull(pair) |> unique(),
+  list("mask:pLOF|miss" = x |> dplyr::filter(IVset %in% c("mask:pLOF", "mask:miss", "mask:pLOF|miss")) |>  dplyr::pull(pair) |> unique(),
        "IV:rare" = x |> dplyr::filter(IVset %in% c("exome:ultrarare","exome:rare")) |>  dplyr::pull(pair) |> unique(),
        "IV:common" = x |> dplyr::filter(IVset %in% c("exome:common", "genome:common")) |>  dplyr::pull(pair) |> unique())})
 upset_sig_cis <- purrr::map(names(upset_sig_cis[[1]]), ~ purrr::flatten_chr(purrr::map(upset_sig_cis, .x)))
@@ -1235,7 +1768,7 @@ sig_MR_relaxed_0.01 <- lapply(res_MR_relaxed, function(x){
 
 # Upset plot of overlap in support for exposure --> outcome association
 upset_sig_cis_0.01 <- lapply(sig_MR_relaxed_0.01, function(x){
-  list("mask:pLOF|miss" = x |> dplyr::filter(IVset == "mask:pLOF|miss") |>  dplyr::pull(pair) |> unique(),
+  list("mask:pLOF|miss" = x |> dplyr::filter(IVset %in% c("mask:pLOF", "mask:miss", "mask:pLOF|miss")) |>  dplyr::pull(pair) |> unique(),
        "IV:rare" = x |> dplyr::filter(IVset %in% c("exome:ultrarare","exome:rare")) |>  dplyr::pull(pair) |> unique(),
        "IV:common" = x |> dplyr::filter(IVset %in% c("exome:common", "genome:common")) |>  dplyr::pull(pair) |> unique())})
 upset_sig_cis_0.01 <- purrr::map(names(upset_sig_cis_0.01[[1]]), ~ purrr::flatten_chr(purrr::map(upset_sig_cis_0.01, .x)))
@@ -1252,9 +1785,20 @@ g1 <- ggvenn::ggvenn(upset_sig_cis[c(2,3)], fill_color = c("steelblue1","orange"
 ### Of rare unique:
 ### Lack of common IVs
 table(g1$data |> dplyr::filter(`variant:rare` == TRUE & `variant:common` == FALSE) |> pull(`_key`) %in% common_pairs)
+### Significant at lower threshold?
+table(g1$data |>
+  dplyr::filter(`variant:rare` == TRUE & `variant:common` == FALSE) |>
+  dplyr::filter(`_key` %in% common_pairs) |>
+  pull(`_key`) %in% upset_sig_cis_0.01$`variant:common`) # 1 yes, 10 no
+
 ### Of common unique:
 ### Lack of rare IVs
 table(g1$data |> dplyr::filter(`variant:rare` == FALSE & `variant:common` == TRUE) |> pull(`_key`) %in% rare_pairs)
+### Significant at lower threshold?
+table(g1$data |>
+  dplyr::filter(`variant:rare` == FALSE & `variant:common` == TRUE) |>
+  dplyr::filter(`_key` %in% rare_pairs) |>
+  pull(`_key`) %in% upset_sig_cis_0.01$`variant:rare`) # 18 yes, 81 no
 ### Of shared:
 ### Concordant vs discordant direction of effect
 shared_5e5 <- g1$data |> dplyr::filter(`variant:rare` == TRUE & `variant:common` == TRUE) |> pull(`_key`)
@@ -1264,6 +1808,11 @@ concordant_5e5 <- do.call("rbind",lapply(sig_MR_relaxed, function(x){x |> dplyr:
   summarise(length(unique(sign(b))))
 ## Concordant sign?
 table(concordant_5e5[,2]==1)
+
+## Overlap in sig exposure-outcome pairs (P<5e-5)
+g1_all <- ggvenn::ggvenn(upset_sig_cis, fill_color = c("mediumorchid","steelblue1","orange"), set_name_size = 5) + 
+  labs(title = "Exposure:outcome pair \nP(IVW)<5e-5") +
+  theme(plot.title = element_text(hjust = 0.5))
 
 ## Overlap in sig exposure-outcome pairs (P<0.01)
 g2 <- ggvenn::ggvenn(upset_sig_cis_0.01[c(2,3)], fill_color = c("steelblue1","orange"), set_name_size = 5) +
@@ -1276,7 +1825,6 @@ table(g2$data |> dplyr::filter(`variant:rare` == TRUE & `variant:common` == FALS
 # g2$data |>
 #   dplyr::filter(`variant:rare` == TRUE & `variant:common` == FALSE) |>
 #   dplyr::mutate(commonIVs_exist = `_key` %in% common_pairs)
-
 ### Of common unique:
 ### Lack of rare IVs
 table(g2$data |> dplyr::filter(`variant:rare` == FALSE & `variant:common` == TRUE) |> pull(`_key`) %in% rare_pairs)
@@ -1284,7 +1832,6 @@ table(g2$data |> dplyr::filter(`variant:rare` == FALSE & `variant:common` == TRU
 # g2$data |>
 #   dplyr::filter(`variant:rare` == FALSE & `variant:common` == TRUE) |>
 #   dplyr::mutate(rareIVs_exist = `_key` %in% rare_pairs)
-
 ### Of shared:
 ### Concordant vs discordant direction of effect
 shared_0.01 <- g2$data |> dplyr::filter(`variant:rare` == TRUE & `variant:common` == TRUE) |> pull(`_key`)
@@ -1295,17 +1842,28 @@ concordant_0.01 <- do.call("rbind",lapply(sig_MR_relaxed_0.01, function(x){x |> 
 ## Concordant sign?
 table(concordant_0.01[,2]==1)
 
-# 38 causal protein --> outcome relationships when instrumenting using rare cis variants or masks (p<5x10^-5)
+# 38 causal protein --> outcome relationships when instrumenting using rare cis variants (p<5x10^-5)
 # 31 undetected when using common cis-IVs at this threshold
 ## Of these 31:
 ### 20 lacked sufficient common-IVs and were not tested
-### 2 are significant using common-IVs at a relaxed threshold 0.05>p>5x10^-5
-### 9 were tested but using common-IVs but no causal associaton was detected
+### 1 are significant using common-IVs at a relaxed threshold 0.01>p>5x10^-5
+### 10 were tested but using common-IVs but no causal associaton was detected
+
+# 131 causal protein --> outcome relationships when instrumenteing using common cis variants
+# 124 undetected when using rare cis-IVs at this threshold
+### 25 lacked sufficient rare-IVs and were not teted
+### 18 are significant using rare-IVs at a relaxed threshold 0.01>p>5x10^-5
+### 81 were tested but using rare-IVs but no causal associaton was detected
+
 ```
 
 ```{r}
 #| label: venns
+#| fig-width: 10
+#| fig-height: 7
+
 gridExtra::grid.arrange(grobs = list(g1,g2), nrow = 1)
+gridExtra::grid.arrange(grobs = list(g1_all), nrow = 1)
 ```
 
 **Example results**
@@ -1314,14 +1872,12 @@ Plot effect estimates across IV sets for a given exposure-outcome pair
 
 ```{r}
 #| label: plot-mr-results
-#| fig.width: 14
-#| fig.height: 8.5
 
 plot_results <- function(exposure, outcome){
   
   pair <- paste(exposure, outcome, sep = "_")
   # Individual SNP results
-  dat_snps <- do.call("rbind",lapply(harmonised_snps_relaxed[[outcome]][[pair]][names(variant_IVsets)], function(x){
+  dat_snps <- do.call("rbind",lapply(harmonised_snps_relaxed[[outcome]][[pair]][names(paper_IVsets)], function(x){
     x |> dplyr::filter(cis_trans == "cis", mr_keep == TRUE) |>
       dplyr::select(SNP, beta.exposure, beta.outcome, pval.exposure, pval.outcome, se.exposure, se.outcome)})) |>
     tibble::rownames_to_column("IV_set") |>
@@ -1331,11 +1887,12 @@ plot_results <- function(exposure, outcome){
   
   # MR estimates
   dat_res <- res_MR_relaxed[[outcome]][[pair]] |> 
-    dplyr::filter(cis_trans == "cis", method %in% c("Wald ratio", "Inverse variance weighted"), IV_set %in% names(variant_IVsets)) |>
+    dplyr::filter(cis_trans == "cis", method %in% c("Wald ratio", "Inverse variance weighted"), IV_set %in% names(paper_IVsets)) |>
     dplyr::mutate(IV_set = factor(IVsets[IV_set], levels = IVsets))
   
   ## IVW plot
-  p_slope <- dat_snps |> ggplot(aes(x = beta.exposure, y = beta.outcome, colour = IV_set)) +
+  p_slope <- dat_snps |> dplyr::filter(IV_set %in% variant_IVsets) |> 
+    ggplot(aes(x = beta.exposure, y = beta.outcome, colour = IV_set)) +
     geom_hline(yintercept = 0, colour = "grey70") +
     geom_vline(xintercept = 0, colour = "grey70") +
     geom_errorbar(aes(xmin = beta.exposure - 1.96*se.exposure, xmax = beta.exposure + 1.96*se.exposure), height = 0, alpha = 0.3) +
@@ -1350,7 +1907,8 @@ plot_results <- function(exposure, outcome){
     labs(x = expression(beta["exposure"]), y = expression(beta["outcome"]), title = paste("Exposure:", exposure, "Outcome:", outcome))
     
   ## Forest plot
-  p_forest <- dat_res |> ggplot(aes(x = b, y = IV_set, colour = IV_set)) +
+  p_forest_vars <- dat_res |> dplyr::filter(IV_set %in% variant_IVsets) |>
+    ggplot(aes(x = b, y = IV_set, colour = IV_set)) +
     geom_vline(xintercept = 0, colour = "grey20", lty = 2) +
     geom_point(aes(size = nsnp)) +
     geom_errorbarh(aes(xmin = b-1.96*se, xmax = b+1.96*se, group = cis_trans), height = 0.4) +
@@ -1362,22 +1920,217 @@ plot_results <- function(exposure, outcome){
           legend.position = "right") +
     labs(x = "IVW", y = "", size = "n(IVs)")
   
-  cowplot::ggdraw() + cowplot::draw_plot(p_slope,0,0,0.5,1) + cowplot::draw_plot(p_forest,0.5,0.3,0.5,0.5)
+  p_forest_mask <- dat_res |> dplyr::filter(!(IV_set %in% variant_IVsets)) |>
+    ggplot(aes(x = b, y = IV_set, colour = IV_set)) +
+    geom_vline(xintercept = 0, colour = "grey20", lty = 2) +
+    geom_point(size = 3) +
+    geom_errorbarh(aes(xmin = b-1.96*se, xmax = b+1.96*se, group = cis_trans), height = 0.4) +
+    scale_colour_manual(values = cols_IVsets) +
+    scale_size_area() +
+    theme_minimal() + guides(colour = "none") +
+    theme(plot.title = element_text(hjust = 0.5), 
+          axis.text.x = element_text(size = 7),
+          legend.position = "right") +
+    labs(x = "WR", y = "", size = "n(IVs)")
+  
+  cowplot::ggdraw() + cowplot::draw_plot(p_slope,0,0,0.5,1) + 
+    cowplot::draw_plot(p_forest_vars,0.5,0.2,0.5,0.4) +
+    cowplot::draw_plot(p_forest_mask,0.5,0.6,0.4,0.2)
 }
+```
+
+```{r}
+#| label: plot-mr-results-explore
+#| include: FALSE
+
+## Plot, common variant associations lacking rare evidence
+common_only <- g2$data |> dplyr::filter(`variant:rare` == FALSE, `variant:common` == TRUE) |> dplyr::pull(`_key`)
+common_only <- common_only[common_only %in% upset_sig_cis$`variant:common`] # Significant w FDR correction
+
+apply(as.data.frame(do.call("rbind",(strsplit(common_only, "_")))), MARGIN = 1,
+                    FUN = function(x){plot_results(exposure = x["V1"], outcome = x["V2"])})
+
+# CLMP-SBP
+# HDDC2-RBCcount (four rare variants in gene)
+# MPO-CorpVol
+
+## Plot, rare variant associations lacking common evidence
+rare_only <- g2$data |> dplyr::filter(`variant:rare` == TRUE, `variant:common` == FALSE) |> dplyr::pull(`_key`)
+rare_only <- rare_only[rare_only %in% upset_sig_cis$`variant:rare`] # Significant w FDR correction
+
+apply(as.data.frame(do.call("rbind",(strsplit(rare_only, "_")))), MARGIN = 1,
+                    FUN = function(x){plot_results(exposure = x["V1"], outcome = x["V2"])})
+
+# Shared
+shared <- g1$data |> dplyr::filter(`variant:rare` == TRUE, `variant:common` == TRUE) |> dplyr::pull(`_key`)
+
+apply(as.data.frame(do.call("rbind",(strsplit(shared, "_")))), MARGIN = 1,
+                    FUN = function(x){plot_results(exposure = x["V1"], outcome = x["V2"])})
+```
+
+
+```{r}
+#| label: plot-mr-results-examples
+#| fig.width: 14
+#| fig.height: 8.5
 
 ## Example of concordant results from instrument sets (PRSS53 in BMI)
 #plot_results(exposure = "PRSS53", outcome = "BMI")
-ex1 <- plot_results(exposure = "APOE", outcome = "LDL")
+ex1 <- plot_results(exposure = "AMPD3", outcome = "HbA1c")
+ex2 <- plot_results(exposure = "PCSK9", outcome = "LDL") ## Lack of common IVs
+
 ## Example of rare eviedence only 
 #plot_results(exposure = "GMPR", outcome = "RBCcount") ## Lack of common IVs
-ex2 <- plot_results(exposure = "PCSK9", outcome = "LDL") ## Lack of common IVs
-ex3 <- plot_results(exposure = "CDSN", outcome = "PlatVol")
+ex3 <- plot_results(exposure = "SMPD1", outcome = "SBP")
 #ex3 <- plot_results(exposure = "VNN1", outcome = "VitD")
 ## Example of common evidence only
 #ex4 <- plot_results(exposure = "PRSS53", outcome = "LDL")
-ex4 <- plot_results(exposure = "CSTB", outcome = "PlatVol")
+#ex4 <- plot_results(exposure = "CDSN", outcome = "PlatVol")
+ex4 <- plot_results(exposure = "HDDC2", outcome = "RBCcount")
 
 gridExtra::grid.arrange(grobs = list(ex1,ex2,ex3,ex4), nrow = 2)
+```
+
+**Forest plots of wald ratios**
+
+```{r}
+#| label: case-study-wrs
+
+# Pull IVs used for MR (across variant sets), derive wald ratios and annotate exome variants with amino acid change
+annotate_ivs <- function(outcome, exposure, snpset){
+  # Pull cis variants
+  ivs_exposure <- lapply(snpset[[outcome]][[paste(exposure,outcome,sep = "_")]], function(x){x |> dplyr::filter(cis_trans == "cis")})
+  ivs_exposure <- ivs_exposure[unlist(lapply(ivs_exposure, nrow)) > 0]
+  
+  # Derive wald ratios for all cis-IVs, all frequencies
+  keep_cols <- c("SNP","variant","chr.exposure","pos.exposure","beta.exposure","beta.outcome",
+                 "se.exposure","se.outcome","pval.exposure","pval.outcome",
+                 "eaf.exposure","cis_trans","gene.outcome", "ANNOTATON")
+  
+  ## Preformat data
+  ivs_exposure_all <- do.call("bind_rows", mapply(FUN = function(x,y){
+    keep_cols_df <- intersect(keep_cols, colnames(x))
+    x <- x[,keep_cols_df]
+    x$IV_set <- y
+    return(x)}, x = ivs_exposure[names(variant_IVsets)], y = variant_IVsets, SIMPLIFY = FALSE)) |>
+    dplyr::mutate(IV_set = factor(IV_set, levels = variant_IVsets[c(1,2,4,3)]),
+                  chr.exposure = ifelse(grepl("rs", SNP), sub(":.*","",variant), chr.exposure),
+                  pos.exposure = ifelse(grepl("rs", SNP), sub(".*:(.*)_.*_.*","\\1",variant), pos.exposure),
+                  SNP = toupper(ifelse(grepl("rs", SNP), variant, SNP))) |>
+    dplyr::arrange(pos.exposure, IV_set) |>
+    dplyr::filter(duplicated(SNP) == FALSE, !is.na(SNP))
+  
+  ## WRs
+  wrs_all <- t(apply(ivs_exposure_all, MARGIN = 1, function(x){
+    TwoSampleMR::mr_wald_ratio(b_exp = as.numeric(x["beta.exposure"]),
+                               b_out = as.numeric(x["beta.outcome"]), 
+                               se_exp = as.numeric(x["se.exposure"]),
+                               se_out = as.numeric(x["se.outcome"])) |> unlist()
+  }))
+    
+  colnames(wrs_all) <- paste0("wald_ratio_", colnames(wrs_all))
+  wrs_all <- cbind(ivs_exposure_all, wrs_all)
+  
+  # Annotate exome variants
+  deets_snps <- wes_deets |> dplyr::mutate(SNP_join = gsub("-","_",sub("-",":",Variant)))
+
+  wrs_all <- left_join(wrs_all, 
+                       deets_snps[,c("SNP_join","cDNA change","Amino acid change","Exon rank","ANNOTATION")],
+                       by = c("SNP" = "SNP_join")) |>
+    dplyr::mutate(exposure = exposure, outcome = outcome)
+  
+  return(wrs_all)
+}
+
+# Plot
+# ivs = harmonised SNP data with appendend wald ratios and variant details
+# orientate = TRUE (orientate to expression increasing allele)
+plot_forest_snps <- function(iv_effects, orientate){
+  iv_effects$SNP_name = ifelse(!is.na(iv_effects$`Amino acid change`) & grepl("exome",as.character(iv_effects$IV_set)),
+                               paste0("chr",sub("_.*","",iv_effects$SNP), " (", iv_effects$`Amino acid change`, " ", iv_effects$gene.outcome, ")"),
+                               paste0("chr",sub("_.*","",iv_effects$SNP)))
+    
+   if(orientate == TRUE){
+     flip_sign <- ifelse(iv_effects$beta.exposure < 0, TRUE, FALSE)
+     iv_effects$beta.exposure[flip_sign] <- iv_effects$beta.exposure[flip_sign]*-1
+     iv_effects$beta.outcome[flip_sign] <- iv_effects$beta.outcome[flip_sign]*-1
+   }
+  
+  ntests <- nrow(iv_effects)
+  exposure <- unique(iv_effects$exposure)
+  outcome <- unique(iv_effects$outcome)
+  
+  f1 <- iv_effects |>
+    dplyr::mutate(col_points = ifelse(pval.exposure < 1, as.character(IV_set), NA)) |>
+    ggplot(aes(x = SNP_name, y = beta.exposure, colour = col_points)) +
+    geom_hline(yintercept = 0, lty = 2) +
+    geom_point(size = 2.5) +
+    geom_errorbar(aes(ymin = beta.exposure - 1.96*se.exposure,
+                      ymax = beta.exposure + 1.96*se.exposure), width = 0.3) +
+    scale_colour_manual(values = cols_IVsets, na.value = "grey90") +
+    theme_minimal() +
+    theme(axis.text.x = element_blank(), legend.position = "none") +
+    labs(x = "", y = "Bx")
+  
+  f2 <- iv_effects |>
+    dplyr::mutate(col_points = ifelse(pval.outcome < 1, as.character(IV_set), NA)) |>
+    ggplot(aes(x = SNP_name, y = beta.outcome, colour = col_points)) +
+    geom_hline(yintercept = 0, lty = 2) +
+    geom_point(size = 2.5) +
+    geom_errorbar(aes(ymin = beta.outcome - 1.96*se.outcome,
+                      ymax = beta.outcome + 1.96*se.outcome), width = 0.3) +
+    scale_colour_manual(values = cols_IVsets, na.value = "grey90") +
+    theme_minimal() +
+    theme(axis.text.x = element_blank(), legend.position = "none") +
+    labs(x = "", y = "By")
+  
+  f3 <- iv_effects |>
+    dplyr::mutate(col_points = ifelse(wald_ratio_pval < 1, as.character(IV_set), NA)) |>
+    ggplot(aes(x = SNP_name, y = wald_ratio_b, colour = col_points)) +
+    geom_hline(yintercept = 0, lty = 2) +
+    geom_point(size = 2.5) +
+    geom_errorbar(aes(ymin = wald_ratio_b - 1.96*wald_ratio_se,
+                      ymax = wald_ratio_b + 1.96*wald_ratio_se), width = 0.3) +
+    scale_colour_manual(values = cols_IVsets, na.value = "grey90") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 75, hjust = 1),
+          legend.position = "none") +
+    labs(x = "", y = "By/Bx")
+  
+  gridExtra::grid.arrange(f1, f2, f3, heights = c(0.2, 0.2, 0.48), top = paste0(exposure, " IVs ", exposure, ":", outcome))
+}
+```
+
+```{r}
+#| label: AMPD3
+#| fig.width: 4
+#| fig.height: 8
+
+plot_forest_snps(iv_effects = annotate_ivs(outcome = "HbA1c", exposure = "AMPD3", snpset = harmonised_snps_relaxed), orientate = TRUE)
+```
+
+```{r}
+#| label: PCSK9
+#| fig.width: 2
+#| fig.height: 8
+
+plot_forest_snps(iv_effects = annotate_ivs(outcome = "LDL", exposure = "PCSK9", snpset = harmonised_snps_relaxed), orientate = TRUE)
+```
+
+```{r}
+#| label: SMPD1
+#| fig.width: 6
+#| fig.height: 8
+
+plot_forest_snps(iv_effects = annotate_ivs(outcome = "SBP", exposure = "SMPD1", snpset = harmonised_snps_relaxed), orientate = TRUE)
+```
+
+```{r}
+#| label: HDDC2
+#| fig.width: 4
+#| fig.height: 8
+
+plot_forest_snps(iv_effects = annotate_ivs(outcome = "RBCcount", exposure = "HDDC2", snpset = harmonised_snps_relaxed), orientate = TRUE)
 ```
 
 **Comparison of IVW effect estimates across instrument sets**
@@ -1957,7 +2710,92 @@ plot_concordance(concordance = comp_IVWs_7_conc, title = "IVW estimate concordan
 plot_concordance(concordance = comp_IVWs_8_conc, title = "IVW estimate concordance: WES common ultrarare cis vs trans-IVs") 
 ```
 
-### Heterogenity in causal effects
+### Heterogenity vs pleiotropy profile
+
+If the cis-pleiotropy profile of common and rare IVs for a gene is more consistant (greater overlap in the genes instrumented), are the MR effect estimates more likely to be consistent?
+
+```{r}
+#|label: heterogenity-vs-pleiotropy
+
+# Pull list of all cis pqtls used as instruments in the relaxed threshold analysis
+# exome::rare and genome::common for this analysis
+
+varIDs_relaxed <- list("dhindsa_exwas_variant_rare_pruned" = 
+                         do.call("rbind", lapply(harmonised_snps_relaxed$BMI, function(x){x["dhindsa_exwas_variant_rare_pruned"][[1]]})) |> 
+                         dplyr::filter(cis_trans == "cis", mr_keep == TRUE) |> pull(SNP) |> unique(),
+                       "sun_gwas_variant_common_clumped" = 
+                         do.call("rbind", lapply(harmonised_snps_relaxed$BMI, function(x){
+                           dat <- x["sun_gwas_variant_common_clumped"][[1]]
+                           if(all(is.na(dat$SNP))){return(NULL)}
+                           dat[,c("variant","cis_trans","mr_keep")]})) |> 
+                         dplyr::filter(cis_trans == "cis", mr_keep == TRUE) |> pull(variant) |> unique())
+# Correct SNP ID formatting
+varIDs_relaxed <- lapply(varIDs_relaxed, function(x){toupper(gsub("_","-",sub(":","-",x)))})
+
+
+## HERE 
+
+
+# Calculate proportion of cis and trans associated genes that are shared between common and rare IVs for a given exposure
+# As done above, but using all variants, not just the most pleiotropic
+
+
+
+
+
+
+
+
+
+
+
+# Summarise associations per variant (pQTL)
+pQTLs_assocs_MRset <- mapply(function(x, y){
+  x <- x |> dplyr::group_by(variant, proximal_gene) |> 
+    dplyr::summarise(n_assocs = n(), 
+                     n_cis = length(which(cis_trans == "cis")),
+                     n_truecis = sum(proximal_gene == paste0("'",protein_target,"'")),
+                     n_trans = length(which(cis_trans == "trans")),
+                     assoc_genes = paste(unique(protein_target), collapse = ";"),
+                     assoc_cis_genes = paste(unique(protein_target[cis_trans == "cis"]), collapse = ";"),
+                     assoc_trans_genes = paste(unique(protein_target[cis_trans == "trans"]), collapse = ";"))
+  x$IV_set <- y
+  return(x)
+}, x = lookup_pQTLs_unpruned, y = as.list(names(lookup_pQTLs_unpruned)), SIMPLIFY = F)
+
+pqtls_assocs_joined_MRset <- do.call("rbind", pQTLs_assocs_MRset) |>
+  dplyr::mutate(IV_set = factor(IVsets[IV_set], levels = IVsets))
+
+
+
+
+
+
+
+
+
+
+# Pull list of all cis pqtls used as instruments in the relaxed threshold analysis
+# exome::rare and genome::common for this analysis
+pqtls_MRset <- pull_pqtls(snpset = harmonised_snps_relaxed, IVsetnames = c("dhindsa_exwas_variant_rare_pruned","sun_gwas_variant_common_clumped"))
+names(pqtls_MRset) <- names_genes
+
+pqtls_MRset <- sapply(c("dhindsa_exwas_variant_rare_pruned","sun_gwas_variant_common_clumped"), 
+                      function(x){do.call(rbind, lapply(pqtls_MRset, `[[`, x))} |> 
+                        na.exclude() |> 
+                        dplyr::filter(cis_trans == "cis") |>
+                        dplyr::pull(SNP) |>
+                        unique(), simplify = F)
+
+# Extract variants used for MR
+pQTLs_assocs_MRset$dhindsa_exwas_variant_rare <- pQTLs_assocs_MRset$dhindsa_exwas_variant_rare$variant %in% toupper(pqtls_MRset)
+
+
+```
+
+
+
+### Heterogenity in causal effects (examples)
 
 Restricting to those protein exposures that show signficiant causal effects on a given outcome (at p \<= 0.05 with \>= 3 IVs), and significant heterogenity between rare and common cis variant IV sets (at Qstat P(FDR) \< 0.05):
 
@@ -2100,7 +2938,7 @@ lapply(res_IVW_cistrans, plot_forest_cistrans)[c(5)]
 
 How often do causal estimates for a protein:outcome effect derived from cis- and trans-pQTLs agree (in terms of significance and direction of effect)? 
 
-### Consistency in causal effects
+### Consistency in causal effects (examples)
 
 Restricting to those protein exposures that show signficiant causal effects on a given outcome (at p \<= 0.05 with \>= 3 IVs) supported by rare and common cis variant IV sets (Qsat P(FDR) \< 0.05):
 
@@ -2152,14 +2990,24 @@ lapply(res_IVW_consistant, plot_forest)[c(3,4)]
 ```
 
 ## Case study: SMPD1-SBP
-
 ```{r}
 #| label: case-study
-#| fig.width: 7
-#| fig.height: 6
+#| fig.width: 6
+#| fig.height: 4
 
 ## MR with LD pruned rare variants (in cis region, including outside of gene):
 plot_results(exposure = "SMPD1", outcome = "SBP")
+```
+
+```{r}
+#| label: case-study-wrs
+#| fig.width: 7
+#| fig.height: 6
+
+
+### FUNCTION NOW ABOVE
+
+
 
 ## Filter to cis variants in the gene itself and repeat MR
 ivs_SMPD1 <- lapply(harmonised_snps_relaxed$SBP$SMPD1_SBP, function(x){x |> dplyr::filter(cis_trans == "cis")})
@@ -2260,10 +3108,7 @@ plot_genomefeatures <- function(chr, regionstart, regionstop, marker_positions){
   region <- GRanges(seqnames = chr, ranges = IRanges(regionstart, regionstop))
   # Extract reference annotations in region
   mane_region <- mane_ensembl[mane_ensembl %over% region]
-  mane_region <- mane_region[mcols(mane_region)$type == "exon"]
-  mane_region <- data.frame(mane_region) |> 
-    dplyr::arrange(start) |>
-    dplyr::mutate(fill = ifelse(gene_name == "SMPD1", "red", "grey80"))
+  mane_region <- mane_region[mcols(mane_region)$type == "exon" & mcols(mane_region)$tag == "MANE_Select"]
   
   # Genome ranges
   grtrack <- GeneRegionTrack(
@@ -2276,12 +3121,11 @@ plot_genomefeatures <- function(chr, regionstart, regionstop, marker_positions){
     symbol = "gene_name",
     stacking = "full",
     collapseTranscripts = FALSE,
-    showId = FALSE,
-    fill = mane_region$fill
+    showId = FALSE
   )
   
-  displayPars(gene_track) <- list(
-    transcriptAnnotation = "transcript_id",
+  displayPars(grtrack) <- list(
+    transcriptAnnotation = "gene_name",
     just.group = "above")
   
   # Convert to snp positons to GRanges object
@@ -2302,14 +3146,12 @@ plot_genomefeatures <- function(chr, regionstart, regionstop, marker_positions){
 iv_positions = data.frame(chr = "chr11",
                           pos = as.numeric(wrs_SMPD1_all$pos.exposure))
 
+# Zoom in
+plot_genomefeatures(chr = "chr11", regionstart = 6390000, regionstop = 6400000, marker_positions = iv_positions)
 # Zoom out
-plot_genomefeatures(chr = "chr11", regionstart = 6350000, regionstop = 6400000, marker_positions = iv_positions)
-
-## Need to figure out what the hell is going on here!
-
+plot_genomefeatures(chr = "chr11", regionstart = 6240000, regionstop = 6601000, marker_positions = iv_positions)
 
 ```
-
 
 ## Allelic series
 
