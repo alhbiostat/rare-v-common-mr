@@ -13,6 +13,10 @@
 #   "sun_gwas_variant_common_finemapped",
 #   "sun_gwas_variant_common_clumped")
 
+library(ggplot2)
+library(dplyr)
+library(patchwork)
+
 ## =============================================================================================================== ##
 
 # Generate summary table of results detailing:
@@ -154,6 +158,143 @@ effect_heterogeneity <- function(beta_vec, se_vec){
   Qjpval <- pchisq(Qj, 1, lower.tail=FALSE)
   Qpval <- pchisq(Q, Qdf, lower.tail=FALSE)
   return(c(Q=Q, Qpval=Qpval))
+}
+
+## =============================================================================================================== ##
+
+# Plot IV positions on gene
+library(GenomicRanges)
+
+genome_axis <- GenomeAxisTrack()
+# MANE-select transcripts
+mane_ensembl <- rtracklayer::import(file.path(data_dir, "MANE.GRCh38.v1.5.ensembl_genomic.gtf.gz"))
+
+plot_genomefeatures <- function(chr, regionstart, regionstop, marker_positions){
+  
+  region <- GRanges(seqnames = chr, ranges = IRanges(regionstart, regionstop))
+  # Extract reference annotations in region
+  mane_region <- mane_ensembl[mane_ensembl %over% region]
+  mane_region <- mane_region[mcols(mane_region)$type == "exon" & mcols(mane_region)$tag == "MANE_Select"]
+  
+  # Genome ranges
+  grtrack <- GeneRegionTrack(
+    mane_region,
+    chromosome = chr,
+    name = "Gene Model",
+    transcript = "transcript_id",
+    exon = "exon_id",
+    gene = "gene_id",
+    symbol = "gene_name",
+    stacking = "squish",
+    collapseTranscripts = "meta",
+    showId = FALSE
+  )
+  
+  displayPars(grtrack) <- list(
+    transcriptAnnotation = "gene_name",
+    just.group = "above",
+    min.height = 20)
+  
+  # Convert to snp positons to GRanges object
+  snp_gr <- GRanges(
+    seqnames = marker_positions$chr,
+    ranges = IRanges(start = marker_positions$pos, width = 1))
+  
+  # SNP annotation track
+  snptrack <- AnnotationTrack(
+    snp_gr,
+    name = "SNPs",
+    shape = "box",
+    stacking = "dense")
+  
+  plotTracks(list(genome_axis, grtrack, snptrack), from = regionstart, to = regionstop,
+             sizes = c(1, 3, 1))
+}
+
+## ggplot2 version 
+
+plot_genomefeatures_gg <- function(chr, regionstart, regionstop, marker_positions) {
+  
+  region <- GRanges(seqnames = chr, ranges = IRanges(regionstart, regionstop))
+  # Extract reference annotations in region
+  #mane_region <- mane_ensembl[mane_ensembl %over% region]
+  genes_in <- unique(mane_ensembl[mane_ensembl %over% region]$gene_name)
+  mane_region <- mane_ensembl[mane_ensembl$gene_name %in% genes_in]
+  mane_region <- mane_region[mcols(mane_region)$type == "exon" & mcols(mane_region)$tag == "MANE_Select"]
+  
+  exons <- as.data.frame(mane_region) |>
+    select(start, end, strand, gene_name)
+  
+  # Order genes by their leftmost exon start; assign numeric y positions
+  gene_extents <- exons |>
+    group_by(gene_name, strand) |>
+    summarise(gene_start = min(start), gene_end = max(end), .groups = "drop") |>
+    arrange(gene_start) |>
+    mutate(y_pos = row_number())
+  gene_extents$gene_start <- sapply(gene_extents$gene_start, function(x){max(x, regionstart)})
+  gene_extents$gene_end <- sapply(gene_extents$gene_end, function(x){min(x, regionstop)})
+  
+  exons <- exons |>
+    left_join(gene_extents |> select(gene_name, y_pos), by = "gene_name")
+  
+  # --- Gene model panel ---------------------------------------------------------
+  p_genes <- ggplot() +
+    # Thin backbone spanning full gene extent
+    geom_segment(
+      data = gene_extents,
+      aes(x = gene_start, xend = gene_end, y = y_pos, yend = y_pos),
+      linewidth = 0.4, colour = "grey30"
+    ) +
+    # Exon boxes
+    geom_rect(
+      data = exons,
+      aes(xmin = start, xmax = end, ymin = y_pos - 0.3, ymax = y_pos + 0.3),
+      fill = "steelblue", colour = NA
+    ) +
+    scale_x_continuous(
+      limits  = c(regionstart-1000, regionstop+1000),
+      expand  = c(0, 0),
+      labels  = scales::label_number(scale = 1e-6, suffix = " Mb")
+    ) +
+    scale_y_continuous(
+      breaks = gene_extents$y_pos,
+      labels = gene_extents$gene_name,
+      expand = expansion(add = 0.7)
+    ) +
+    labs(x = NULL, y = NULL) +
+    theme_bw() +
+    theme(
+      panel.grid.minor   = element_blank(),
+      panel.grid.major.x = element_blank(),
+      axis.text.x        = element_blank(),
+      axis.ticks.x       = element_blank()
+    )
+  
+  # --- SNP track ----------------------------------------------------------------
+  snp_df <- marker_positions |>
+    filter(chr == !!chr, pos >= regionstart, pos <= regionstop)
+  
+  p_snps <- ggplot(snp_df, aes(x = pos)) +
+    geom_segment(aes(xend = pos, y = 0, yend = 1, colour = IV_set), linewidth = 0.8) +
+    scale_x_continuous(
+      limits = c(regionstart-1000, regionstop+1000),
+      expand = c(0, 0),
+      labels = scales::label_number(scale = 1e-6, suffix = " Mb")
+    ) +
+    scale_y_continuous(breaks = NULL, expand = c(0, 0)) +
+    scale_colour_manual(values = cols_IVsets) +
+    labs(x = paste0(gsub("chr", "Chr ", chr), " position"), y = "IVs") +
+    theme_bw() +
+    theme(
+      legend.position = "none",
+      panel.grid   = element_blank(),
+      axis.ticks.y = element_blank(),
+      axis.text.y  = element_text(size = 8, colour = "grey40")
+    )
+  
+  # --- Combine ------------------------------------------------------------------
+  n_genes <- nrow(gene_extents)
+  p_genes / p_snps + plot_layout(heights = c(max(n_genes, 2), 1))
 }
 
 
