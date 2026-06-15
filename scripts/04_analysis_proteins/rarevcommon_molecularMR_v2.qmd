@@ -450,13 +450,13 @@ Rare and common variant instruments (pQTLs) have been partitioned according to t
 # Number of instruments per protein for each IV set
 # num_IVs <- lapply(res_MR, function(x){
 #   df_out <- data.frame(expand.grid(IV_set = IV_sets, cis_trans = c("cis","trans")))
-#   
+# 
 #   for(i in 1:length(x)){
 #     df <- x[[i]] |> dplyr::summarise(unique(nsnp), .by = c(IV_set, cis_trans))
 #     colnames(df)[3] <- names(x[i])
 #     df_out <- left_join(df_out, df, by = c("IV_set","cis_trans"))
 #   }
-#   
+# 
 #   df_out <- df_out |> tidyr::pivot_longer(cols = 3:length(df_out)) |> na.exclude()
 #   return(df_out)
 # })
@@ -600,6 +600,9 @@ gridExtra::grid.arrange(grobs = p2)
 
 # Manuscript values:
 avail_IVs |> group_by(IV_set, cis_trans) |> summarise(max(n_prots_1IV), max(prop_prots_1IV), max(n_prots_3IV), max(prop_prots_3IV)) |> knitr::kable(digits = 3)
+
+# Total proteins instrumentable with variant/gene IVs (n=2017)
+sub("_.*", "", num_IVs |> dplyr::filter(IV_set %in% names(paper_IVsets), cis_trans == "cis", value >= 1) |> dplyr::pull(name)) |> unique() |> length()
 ```
 
 Repeat with relaxed thresholding for rare variants:
@@ -650,6 +653,9 @@ all_cisIVs |> dplyr::group_by(IV_set) |> dplyr::summarise(num_cis_IVs = length(u
 all_cisIVs_relaxed |> dplyr::group_by(IV_group) |> dplyr::summarise(num_cis_IVs = length(unique(SNP_ID)), num_cis_assocs = sum(n_cis_assocs))
 all_cisIVs_relaxed |> dplyr::group_by(IV_set) |> dplyr::summarise(num_cis_IVs = length(unique(SNP_ID)), num_cis_assocs = sum(n_cis_assocs))
 
+# Total proteins instrumentable with variant IVs (n=2051)
+sub("_.*", "", num_IVs_relaxed |> dplyr::filter(IV_set %in% names(variant_IVsets), cis_trans == "cis", value >= 1) |> dplyr::pull(name)) |> unique() |> length()
+
 ```
 
 **Instrument overlap**
@@ -665,29 +671,29 @@ num_IVs$protein <- sub("_.*","",num_IVs$name)
 
 upset_cis <- list(
   "exome:rare" = num_IVs |> 
-    dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_variant_rare_pruned" & cis_trans == "cis") |> 
-    dplyr::pull(protein),
+    dplyr::filter(IV_set %in% c("dhindsa_exwas_variant_rare_pruned","dhindsa_exwas_variant_ultrarare_pruned")  & cis_trans == "cis") |> 
+    dplyr::pull(protein) |> unique(),
   "ex/genome:common" = num_IVs |> 
-    dplyr::filter(outcome == "BMI" & IV_set %in% c("dhindsa_exwas_variant_common", "sun_gwas_variant_common_clumped") & cis_trans == "cis") |>
+    dplyr::filter(IV_set %in% c("dhindsa_exwas_variant_common", "sun_gwas_variant_common_clumped") & cis_trans == "cis") |>
     dplyr::pull(protein) |> unique())
 
 upset_cis_mask <- list(
   "exome:rare" = num_IVs |> 
-    dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_variant_rare_pruned" & cis_trans == "cis") |> 
-    dplyr::pull(protein),
+    dplyr::filter(IV_set %in% c("dhindsa_exwas_variant_rare_pruned","dhindsa_exwas_variant_ultrarare_pruned") & cis_trans == "cis") |> 
+    dplyr::pull(protein) |> unique(),
   "exome:mask" = num_IVs |> 
-    dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_mask_ptvraredmg" & cis_trans == "cis") |> 
-    dplyr::pull(protein),
+    dplyr::filter(IV_set == "dhindsa_exwas_mask_ptvraredmg" & cis_trans == "cis") |> 
+    dplyr::pull(protein) |> unique(),
   "ex/genome:common" = num_IVs |> 
-    dplyr::filter(outcome == "BMI" & IV_set %in% c("dhindsa_exwas_variant_common", "sun_gwas_variant_common_clumped") & cis_trans == "cis") |>
+    dplyr::filter(IV_set %in% c("dhindsa_exwas_variant_common", "sun_gwas_variant_common_clumped") & cis_trans == "cis") |>
     dplyr::pull(protein) |> unique())
 
 upset_trans <- list(
   "exome:rare" = num_IVs |> 
-    dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_variant_rare_pruned" & cis_trans == "trans") |> 
-    dplyr::pull(protein),
+    dplyr::filter(IV_set %in% c("dhindsa_exwas_variant_rare_pruned","dhindsa_exwas_variant_ultrarare_pruned") & cis_trans == "trans") |> 
+    dplyr::pull(protein) |> unique(),
   "ex/genome:common" = num_IVs |> 
-    dplyr::filter(outcome == "BMI" & IV_set %in% c("dhindsa_exwas_variant_common", "sun_gwas_variant_common_clumped") & cis_trans == "trans") |>
+    dplyr::filter(IV_set %in% c("dhindsa_exwas_variant_common", "sun_gwas_variant_common_clumped") & cis_trans == "trans") |>
     dplyr::pull(protein) |> unique())
 
 # Upset plots
@@ -699,29 +705,29 @@ num_IVs_relaxed$protein <- sub("_.*","",num_IVs_relaxed$name)
 
 upset_cis_relaxed <- list(
   "exome:rare" = num_IVs_relaxed |> 
-    dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_variant_rare_pruned" & cis_trans == "cis") |> 
-    dplyr::pull(protein),
+    dplyr::filter(IV_set %in% c("dhindsa_exwas_variant_rare_pruned","dhindsa_exwas_variant_ultrarare_pruned") & cis_trans == "cis") |> 
+    dplyr::pull(protein) |> unique(),
   "ex/genome:common" = num_IVs_relaxed |> 
-    dplyr::filter(outcome == "BMI" & IV_set %in% c("dhindsa_exwas_variant_common", "sun_gwas_variant_common_clumped") & cis_trans == "cis") |>
+    dplyr::filter(IV_set %in% c("dhindsa_exwas_variant_common", "sun_gwas_variant_common_clumped") & cis_trans == "cis") |>
     dplyr::pull(protein) |> unique())
 
 upset_cis_mask_relaxed <- list(
   "exome:rare" = num_IVs_relaxed |> 
-    dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_variant_rare_pruned" & cis_trans == "cis") |> 
-    dplyr::pull(protein),
+    dplyr::filter(IV_set %in% c("dhindsa_exwas_variant_rare_pruned","dhindsa_exwas_variant_ultrarare_pruned") & cis_trans == "cis") |> 
+    dplyr::pull(protein) |> unique(),
   "exome:mask" = num_IVs_relaxed |> 
-    dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_mask_ptvraredmg" & cis_trans == "cis") |> 
-    dplyr::pull(protein),
+    dplyr::filter(IV_set == "dhindsa_exwas_mask_ptvraredmg" & cis_trans == "cis") |> 
+    dplyr::pull(protein) |> unique(),
   "ex/genome:common" = num_IVs_relaxed |> 
     dplyr::filter(outcome == "BMI" & IV_set %in% c("dhindsa_exwas_variant_common", "sun_gwas_variant_common_clumped") & cis_trans == "cis") |>
     dplyr::pull(protein) |> unique())
 
 upset_trans_relaxed <- list(
   "exome:rare" = num_IVs_relaxed |> 
-    dplyr::filter(outcome == "BMI" & IV_set == "dhindsa_exwas_variant_rare_pruned" & cis_trans == "trans") |> 
-    dplyr::pull(protein),
+    dplyr::filter(IV_set %in% c("dhindsa_exwas_variant_rare_pruned","dhindsa_exwas_variant_ultrarare_pruned") & cis_trans == "trans") |> 
+    dplyr::pull(protein) |> unique(),
   "ex/genome:common" = num_IVs_relaxed |> 
-    dplyr::filter(outcome == "BMI" & IV_set %in% c("dhindsa_exwas_variant_common", "sun_gwas_variant_common_clumped") & cis_trans == "trans") |>
+    dplyr::filter(IV_set %in% c("dhindsa_exwas_variant_common", "sun_gwas_variant_common_clumped") & cis_trans == "trans") |>
     dplyr::pull(protein) |> unique())
 
 # Upset plots
@@ -2171,13 +2177,13 @@ apply(as.data.frame(do.call("rbind",(strsplit(shared, "_")))), MARGIN = 1,
 
 ## Example of concordant results from instrument sets (PRSS53 in BMI)
 #plot_results(exposure = "PRSS53", outcome = "BMI")
-ex1 <- plot_results(exposure = "AMPD3", outcome = "HbA1c")
-ex2 <- plot_results(exposure = "PCSK9", outcome = "LDL") ## Lack of common IVs
+#ex1 <- plot_results(exposure = "AMPD3", outcome = "HbA1c")
+ex1 <- plot_results(exposure = "PCSK9", outcome = "LDL") ## Lack of common IVs
 
 ## Example of rare eviedence only 
 #plot_results(exposure = "GMPR", outcome = "RBCcount") ## Lack of common IVs
-ex3 <- plot_results(exposure = "SMPD1", outcome = "SBP")
-#ex3 <- plot_results(exposure = "VNN1", outcome = "VitD")
+ex2 <- plot_results(exposure = "SMPD1", outcome = "SBP")
+ex3 <- plot_results(exposure = "DBH", outcome = "SBP")
 ## Example of common evidence only
 #ex4 <- plot_results(exposure = "PRSS53", outcome = "LDL")
 #ex4 <- plot_results(exposure = "CDSN", outcome = "PlatVol")
@@ -2418,6 +2424,15 @@ snp1 <- gpmapr::variant(8132004)$coloc_groups
 # rs45438294 (6:125373298 C/T 8132435) - search for proxy
 snp2 <- gpmapr::variant(8132437)$coloc_groups
 
+```
+
+```{r}
+#| label: DBH
+#| fig.width: 14
+#| fig.height: 14
+
+plot_forest_snps(iv_effects = annotate_ivs(outcome = "SBP", exposure = "DBH", snpset = harmonised_snps_relaxed), orientate = FALSE)
+plot_pleiotropy(iv_effects = annotate_ivs(outcome = "SBP", exposure = "DBH", snpset = harmonised_snps_relaxed))
 ```
 
 **Comparison of IVW effect estimates across instrument sets**
@@ -3340,7 +3355,7 @@ wald_ratios$LDL |>
 plot_wald_vep <- function(gene, outcome){
   dat <- wald_ratios[[outcome]] |> 
     dplyr::filter(exposure == gene) |>
-    dplyr::arrange(annots_relaxed, wald_ratio_b) |>
+    dplyr::arrange(annots_relaxed, abs(wald_ratio_b)) |>
     dplyr::mutate(SNP = factor(SNP, levels = SNP))
   
   res <- coastss_annots_relaxed[[outcome]] |>
@@ -3388,7 +3403,58 @@ plot_wald_vep <- function(gene, outcome){
     guides(colour = guide_legend(nrow=2, byrow=TRUE)) +
     p_theme
   
-  return(gridExtra::grid.arrange(grobs = list(p_wald, p_exp, p_out), nrow = 1))
+  gridExtra::grid.arrange(grobs = list(p_wald, p_exp, p_out), nrow = 1)
+}
+
+# Run COAST-SS analysis on select exposure or outcome betas
+run_coastss <- function(wrs, annot_col, weights, protein, outcome="BMI", betas="exposure"){
+  
+  x <- wrs[[outcome]] |> 
+    dplyr::filter(exposure == protein,
+                  allele_match == TRUE)
+  
+    count_vars <- table(x[,annot_col])
+    count_vars_string <- paste(paste0(names(count_vars), "=", count_vars),collapse=";")
+    
+  if(betas == "exposure"){
+      mean_betas <- x |> dplyr::group_by_at(annot_col) |> dplyr::summarise(mean(beta.exposure))
+      mean_betas_string = paste(paste0(mean_betas[[1]], "=", round(mean_betas[[2]],5)), collapse=";")
+      mean_absbetas <- x |> dplyr::group_by_at(annot_col) |> dplyr::summarise(mean(abs(beta.exposure)))
+      mean_absbetas_string = paste(paste0(mean_absbetas[[1]], "=", round(mean_absbetas[[2]],5)), collapse=";")
+    
+    coastss <- AllelicSeries::COASTSS(
+      anno = x[,annot_col],
+      beta = abs(x[,"beta.exposure"]), # Absolute betas to assess magnitude of effect
+      se = x[,"se.exposure"],
+      maf = x[,"eaf.exposure"],
+      weights = weights
+    )
+  }
+  
+    if(betas == "outcome"){
+      mean_betas <- x |> dplyr::group_by_at(annot_col) |> dplyr::summarise(mean(beta.outcome))
+      mean_betas_string = paste(paste0(mean_betas[[1]], "=", round(mean_betas[[2]],5)), collapse=";")
+      mean_absbetas <- x |> dplyr::group_by_at(annot_col) |> dplyr::summarise(mean(abs(beta.outcome)))
+      mean_absbetas_string = paste(paste0(mean_absbetas[[1]], "=", round(mean_absbetas[[2]],5)), collapse=";")
+      
+      coastss <- AllelicSeries::COASTSS(
+        anno = x[,annot_col],
+        beta = abs(x[,"beta.outcome"]), # Absolute betas to assess magnitude of effect
+        se = x[,"se.outcome"],
+        maf = x[,"eaf.outcome"],
+        weights = weights
+      )
+    }
+    
+    res <- data.frame(
+      "exposure" = protein,
+      "outcome" = outcome,
+      "annot_count" = count_vars_string, # number of variants in each annotation class
+      "annot_meanbeta" = mean_betas_string, # mean wald ratio of variants in class
+      "annot_meanabsbeta" = mean_absbetas_string,
+      "alleleic_skat_p" = coastss@Pvals[coastss@Pvals$test == "allelic_skat","pval"])
+    
+  return(res)
 }
 
 ```
@@ -3401,29 +3467,39 @@ plot_wald_vep <- function(gene, outcome){
 #| fig.height: 20
 
 # Load results from COAST-SS allelic series anlysis 
-# 1 = synonymous/noncoding, 2 = benign missense, 3 = deleterious missense, 4 = putative loss of funcion
+# 1 = synonymous/noncoding, 2 = benign missense, 3 = deleterious missense, 4 = putative loss of function
 
 load(file.path(res_dir,"results_molecular_COASTSS_relaxed.rda")) # coastss_annots_relaxed
 
-## Filter out exposure genes for which there were insufficient variants for alleleic series analysis and calculate adjusted p-vals
+## Filter out exposure genes for which there are less than two variants available for each of at least three classes, and calculate adjusted p-vals
 coastss_annots_relaxed <- lapply(coastss_annots_relaxed, function(x){
   x |> 
     dplyr::filter(!is.na(alleleic_skat_p)) |>
+    dplyr::filter(
+      map_int(stringr::str_split(annot_count, ";"), function(pairs) {
+        counts <- as.integer(stringr::str_extract(pairs, "(?<==)\\d+"))
+        sum(counts >= 2, na.rm = TRUE)
+      }) >= 3) |>
     dplyr::mutate(adj_p = p.adjust(alleleic_skat_p, method = "BH"))
 })
 
 outcome_names <- c("LDL direct" = "LDL",
                     "Body mass index (BMI)" = "BMI",
-                    "Vitamin D" = "Vitamin D",
-                    "Triglycerides" = "Triglycerides",
+                    "Vitamin D" = "VitD",
+                    "Triglycerides" = "Trig",
                     "Glycated haemoglobin (HbA1c)" = "HbA1c",
                     "Mean platelet (thrombocyte) volume" = "PlatVol",
-                    "IGF-1" = "IGF-1",
+                    "IGF-1" = "IGF1",
                     "Waist-to-hip ratio adjusted for body mass index (WHRadjBMI)" = "WHRadjBMI",
                     "Red blood cell (erythrocyte) count" = "RBCcount",
                     "Mean corpuscular volume" = "CorpVol",
                     "Systolic blood pressure, automated reading" = "SBP")
-                    
+
+## Top results (P<0.05/859; 5.8x10^-5)
+alpha_coastss = 0.05/82
+coastss_annots_relaxed_top <- do.call("rbind", lapply(coastss_annots_relaxed, function(x){
+  x |> dplyr::filter(adj_p < alpha_coastss) |>
+    dplyr::mutate(outcome_name = outcome_names[outcome])}))
 
 do.call("rbind", coastss_annots_relaxed) |>
   dplyr::mutate(label = ifelse(adj_p < 0.05, exposure, NA),
@@ -3442,14 +3518,38 @@ do.call("rbind", coastss_annots_relaxed) |>
   labs(x = "Protein exposure", y = "-log10(P) Allelic series")
 ```
 
-**Dopamine Beta Hydrozylase (DBH) on systolic blood pressure**
+```{r}
+#| label: COASTSS-results 
+#| fig.width: 12
+#| fig.height: 4.5
+
+mapply(FUN = function(x,y){plot_wald_vep(gene = x, outcome = y)}, 
+       x = as.list(coastss_annots_relaxed_top$exposure), 
+       y = as.list(coastss_annots_relaxed_top$outcome_name), SIMPLIFY = F)
+
+# Split exposure/outcome beta analysis
+# run_coastss(wrs = wald_ratios, protein = "CELSR2", outcome = "LDL", betas = "exposure", weights = c(1,2,3,4), annot_col = "annots_relaxed")
+# run_coastss(wrs = wald_ratios, protein = "CELSR2", outcome = "LDL", betas = "outcome", weights = c(1,2,3,4), annot_col = "annots_relaxed")
+# 
+# run_coastss(wrs = wald_ratios, protein = "LY75", outcome = "PlatVol", betas = "exposure", weights = c(1,2,3,4), annot_col = "annots_relaxed")
+# run_coastss(wrs = wald_ratios, protein = "LY75", outcome = "PlatVol", betas = "outcome", weights = c(1,2,3,4), annot_col = "annots_relaxed")
+# run_coastss(wrs = wald_ratios, protein = "LY75", outcome = "RBCcount", betas = "outcome", weights = c(1,2,3,4), annot_col = "annots_relaxed")
+# run_coastss(wrs = wald_ratios, protein = "LY75", outcome = "CorpVol", betas = "outcome", weights = c(1,2,3,4), annot_col = "annots_relaxed")
+# 
+# run_coastss(wrs = wald_ratios, protein = "LRIG1", outcome = "CorpVol", betas = "exposure", weights = c(1,2,3,4), annot_col = "annots_relaxed")
+# run_coastss(wrs = wald_ratios, protein = "LRIG1", outcome = "CorpVol", betas = "outcome", weights = c(1,2,3,4), annot_col = "annots_relaxed")
+# 
+# run_coastss(wrs = wald_ratios, protein = "DBH", outcome = "SBP", betas = "exposure", weights = c(1,2,3,4), annot_col = "annots_relaxed")
+# run_coastss(wrs = wald_ratios, protein = "DBH", outcome = "SBP", betas = "outcome", weights = c(1,2,3,4), annot_col = "annots_relaxed")
+```
+
+Do missense mutations have larger pQTL effects than synonymous mutations across proteins? On average expectation would be yes, but there is likely between variant variability. Does COAST-SS analysis support monotonicity of absolute pQTL effects scaling with class (with and without pLOF)? Note that we do not have rare missense variants in this analysis that do not have pQTL effects due to thresholding of summary statistics at p<0.01.
 
 ```{r}
-#| label: DBH-SBP 
-#| fig.width: 12
-#| fig.height: 4
+# Run COAST-SS analyses for protein expression (restrict to proteins with sufficient variants across classes to test)
+coastss_exposures <- do.call("rbind", sapply(coastss_annots_relaxed$BMI$exposure, function(x){run_coastss(protein = x, wrs = wald_ratios, weights = c(1,2,3,4), annot_col = "annots_relaxed")}, simplify = F))
 
-plot_wald_vep(gene = "DBH", outcome = "SBP")
+coastss_exposures_noptv <- do.call("rbind", sapply(coastss_annots_relaxed$BMI$exposure, function(x){run_coastss(protein = x, wrs = lapply(wald_ratios, function(x){x |> dplyr::filter(as.numeric(annots_relaxed) < 4)}), weights = c(1,2,3), annot_col = "annots_relaxed")}, simplify = F))
 ```
 
 ## Gene based analysis
