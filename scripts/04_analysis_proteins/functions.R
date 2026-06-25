@@ -297,5 +297,17 @@ plot_genomefeatures_gg <- function(chr, regionstart, regionstop, marker_position
   p_genes / p_snps + plot_layout(heights = c(max(n_genes, 2), 1))
 }
 
+## =============================================================================================================== ##
+
+# Bind two nested lists with the same structure
+bind_nested <- function(x, y) {
+  if (is.data.frame(x) && is.data.frame(y)) {
+    bind_rows(x, y)
+  } else if (is.list(x) && is.list(y)) {
+    Map(bind_nested, x, y)
+  } else {
+    stop("Structures do not match.")
+  }
+}
 
 
